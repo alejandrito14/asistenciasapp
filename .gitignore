@@ -1,0 +1,126 @@
+# ===========================
+# Flutter / Dart
+# ===========================
+
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+.pub-cache/
+build/
+
+# Generated
+**/generated_plugin_registrant.dart
+
+# Coverage
+coverage/
+
+# ===========================
+# Android
+# ===========================
+
+android/.gradle/
+android/captures/
+android/local.properties
+android/key.properties
+
+*.jks
+*.keystore
+
+# APK / AAB
+*.apk
+*.aab
+
+# Gradle
+.gradle/
+
+# ===========================
+# iOS
+# ===========================
+
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/App.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+
+# CocoaPods
+Podfile.lock
+
+# Xcode
+DerivedData/
+
+# ===========================
+# macOS
+# ===========================
+
+macos/Pods/
+macos/Flutter/ephemeral/
+
+# ===========================
+# Linux
+# ===========================
+
+linux/flutter/ephemeral/
+
+# ===========================
+# Windows
+# ===========================
+
+windows/flutter/ephemeral/
+
+# ===========================
+# Web
+# ===========================
+
+build/web/
+
+# ===========================
+# IDE
+# ===========================
+
+.idea/
+.vscode/
+
+*.iml
+
+# ===========================
+# Logs
+# ===========================
+
+*.log
+
+# ===========================
+# OS Files
+# ===========================
+
+.DS_Store
+Thumbs.db
+
+# ===========================
+# Environment
+# ===========================
+
+.env
+.env.*
+
+# Firebase
+google-services.json
+GoogleService-Info.plist
+
+# ===========================
+# Temporary
+# ===========================
+
+*.tmp
+*.temp
+*.swp
+
+# ===========================
+# Misc
+# ===========================
+
+*.lock
