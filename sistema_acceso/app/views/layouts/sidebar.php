@@ -65,6 +65,11 @@ function renderMenu($c, $a) {
                     <i class="bi bi-calendar-event"></i> Calendario Escolar
                 </a>
             </li>
+            <li>
+                <a href="?c=Dashboard&a=justifications" class="<?php echo ($c=='Dashboard' && $a=='justifications') ? 'active' : ''; ?>">
+                    <i class="bi bi-file-earmark-text"></i> Justificantes
+                </a>
+            </li>
             
             <li class="text-muted small fw-bold px-3 mt-3 mb-1">REPORTES</li>
             <li>

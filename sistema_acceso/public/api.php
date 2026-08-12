@@ -357,6 +357,184 @@ if ($action === 'teacherSaveManualAttendance') {
     }
 }
 
+if ($action === 'teacherSessionJustifications') {
+    $sesionClaseId = (int)($body['sesion_clase_id'] ?? 0);
+    if ($sesionClaseId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Sesión no válida.']);
+        exit;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT j.id,
+                j.alumno_id,
+                j.sesion_clase_id,
+                j.motivo,
+                j.evidencia,
+                j.estatus,
+                j.fecha_revision,
+                j.revisado_por,
+                a.matricula,
+                a.nombre AS alumno_nombre,
+                a.apellido_paterno,
+                a.apellido_materno
+         FROM justificaciones j
+         INNER JOIN alumnos a ON a.id = j.alumno_id
+         WHERE j.sesion_clase_id = :sesion_clase_id
+         ORDER BY j.id DESC"
+    );
+    $stmt->bindValue(':sesion_clase_id', $sesionClaseId, PDO::PARAM_INT);
+    $stmt->execute();
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'OK',
+        'data' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+    ]);
+    exit;
+}
+
+if ($action === 'teacherJustifications') {
+    $maestroId = (int)($body['maestro_id'] ?? 0);
+    if ($maestroId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Maestro no válido.']);
+        exit;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT j.id,
+                j.alumno_id,
+                j.sesion_clase_id,
+                j.motivo,
+                j.evidencia,
+                j.estatus,
+                j.created_at,
+                j.fecha_revision,
+                sc.fecha AS sesion_fecha,
+                CASE DAYOFWEEK(sc.fecha)
+                   WHEN 1 THEN 'DOMINGO'
+                   WHEN 2 THEN 'LUNES'
+                   WHEN 3 THEN 'MARTES'
+                   WHEN 4 THEN 'MIERCOLES'
+                   WHEN 5 THEN 'JUEVES'
+                   WHEN 6 THEN 'VIERNES'
+                   WHEN 7 THEN 'SABADO'
+                END AS dia_sesion,
+                h.hora_inicio,
+                h.hora_fin,
+                g.nombre AS grupo_nombre,
+                g.semestre,
+                g.turno,
+                m.clave AS materia_clave,
+                m.nombre AS materia_nombre,
+                a.nombre AS alumno_nombre,
+                a.apellido_paterno,
+                a.apellido_materno
+         FROM justificaciones j
+         INNER JOIN sesiones_clase sc ON sc.id = j.sesion_clase_id
+         INNER JOIN grupo_materia_maestro gmm ON gmm.id = sc.grupo_materia_maestro_id
+         INNER JOIN grupo_materias gm ON gm.id = gmm.grupo_materia_id
+         INNER JOIN grupos g ON g.id = gm.grupo_id
+         INNER JOIN materias m ON m.id = gm.materia_id
+         INNER JOIN alumnos a ON a.id = j.alumno_id
+         LEFT JOIN horarios h ON h.id = (
+             SELECT hh.id
+             FROM horarios hh
+             WHERE hh.grupo_materia_maestro_id = gmm.id
+               AND hh.activo = 1
+               AND hh.dia_semana = CASE DAYOFWEEK(sc.fecha)
+                   WHEN 1 THEN 'DOMINGO'
+                   WHEN 2 THEN 'LUNES'
+                   WHEN 3 THEN 'MARTES'
+                   WHEN 4 THEN 'MIERCOLES'
+                   WHEN 5 THEN 'JUEVES'
+                   WHEN 6 THEN 'VIERNES'
+                   WHEN 7 THEN 'SABADO'
+               END
+             ORDER BY hh.hora_inicio ASC
+             LIMIT 1
+         )
+         WHERE gmm.maestro_id = :maestro_id
+         ORDER BY g.nombre ASC, m.nombre ASC, sc.fecha DESC, j.id DESC"
+    );
+    $stmt->bindValue(':maestro_id', $maestroId, PDO::PARAM_INT);
+    $stmt->execute();
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'OK',
+        'data' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+    ]);
+    exit;
+}
+
+if ($action === 'teacherJustificationUpdate') {
+    $justificationId = (int)($body['justification_id'] ?? 0);
+    $status = strtoupper(trim((string)($body['estatus'] ?? '')));
+    if ($justificationId <= 0 || !in_array($status, ['APROBADO', 'RECHAZADO', 'PENDIENTE'], true)) {
+        echo json_encode(['success' => false, 'message' => 'Datos no válidos.']);
+        exit;
+    }
+
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare(
+            "UPDATE justificaciones
+             SET estatus = :estatus,
+                 fecha_revision = NOW()
+             WHERE id = :id"
+        );
+        $stmt->bindValue(':estatus', $status);
+        $stmt->bindValue(':id', $justificationId, PDO::PARAM_INT);
+        $stmt->execute();
+
+        if ($status === 'APROBADO') {
+            $stmt = $db->prepare(
+                "SELECT sesion_clase_id, alumno_id
+                 FROM justificaciones
+                 WHERE id = :id
+                 LIMIT 1"
+            );
+            $stmt->bindValue(':id', $justificationId, PDO::PARAM_INT);
+            $stmt->execute();
+            $justification = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($justification) {
+                $stmt = $db->prepare(
+                    "SELECT id
+                     FROM catalogo_asistencia
+                     WHERE UPPER(nombre) = 'JUSTIFICADA'
+                     LIMIT 1"
+                );
+                $stmt->execute();
+                $justifiedState = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($justifiedState) {
+                    $stmt = $db->prepare(
+                        "UPDATE asistencias
+                         SET estado_id = :estado_id
+                         WHERE sesion_clase_id = :sesion_clase_id
+                           AND alumno_id = :alumno_id"
+                    );
+                    $stmt->bindValue(':estado_id', (int)$justifiedState['id'], PDO::PARAM_INT);
+                    $stmt->bindValue(':sesion_clase_id', (int)$justification['sesion_clase_id'], PDO::PARAM_INT);
+                    $stmt->bindValue(':alumno_id', (int)$justification['alumno_id'], PDO::PARAM_INT);
+                    $stmt->execute();
+                }
+            }
+        }
+
+        $db->commit();
+        echo json_encode(['success' => true, 'message' => 'Justificación actualizada correctamente.']);
+        exit;
+    } catch (Exception $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        echo json_encode(['success' => false, 'message' => 'No se pudo actualizar la justificación.']);
+        exit;
+    }
+}
+
 if ($action === 'studentDashboard') {
     $alumnoId = (int)($body['alumno_id'] ?? 0);
     if ($alumnoId <= 0) {
@@ -766,6 +944,15 @@ if ($action === 'studentJustificationSessions') {
         "SELECT sc.id AS sesion_clase_id,
                 sc.fecha,
                 sc.estatus,
+                CASE DAYOFWEEK(sc.fecha)
+                   WHEN 1 THEN 'DOMINGO'
+                   WHEN 2 THEN 'LUNES'
+                   WHEN 3 THEN 'MARTES'
+                   WHEN 4 THEN 'MIERCOLES'
+                   WHEN 5 THEN 'JUEVES'
+                   WHEN 6 THEN 'VIERNES'
+                   WHEN 7 THEN 'SABADO'
+                END AS dia_sesion,
                 a.id AS asistencia_id,
                 g.id AS grupo_id,
                 g.nombre AS grupo_nombre,
@@ -783,15 +970,38 @@ if ($action === 'studentJustificationSessions') {
          FROM alumnos_grupos ag
          INNER JOIN grupo_materias gm ON ag.grupo_id = gm.grupo_id
          INNER JOIN grupo_materia_maestro gmm ON gmm.grupo_materia_id = gm.id AND gmm.activo = 1
-         INNER JOIN horarios h ON h.grupo_materia_maestro_id = gmm.id AND h.activo = 1
          INNER JOIN sesiones_clase sc ON sc.grupo_materia_maestro_id = gmm.id
          INNER JOIN asistencias a ON a.sesion_clase_id = sc.id AND a.alumno_id = ag.alumno_id
          INNER JOIN catalogo_asistencia ca ON ca.id = a.estado_id AND UPPER(ca.nombre) = 'FALTA'
          INNER JOIN grupos g ON ag.grupo_id = g.id
          INNER JOIN materias m ON gm.materia_id = m.id
          LEFT JOIN maestros ma ON gmm.maestro_id = ma.id
+         LEFT JOIN horarios h ON h.id = (
+             SELECT hh.id
+             FROM horarios hh
+             WHERE hh.grupo_materia_maestro_id = gmm.id
+               AND hh.activo = 1
+               AND hh.dia_semana = CASE DAYOFWEEK(sc.fecha)
+                   WHEN 1 THEN 'DOMINGO'
+                   WHEN 2 THEN 'LUNES'
+                   WHEN 3 THEN 'MARTES'
+                   WHEN 4 THEN 'MIERCOLES'
+                   WHEN 5 THEN 'JUEVES'
+                   WHEN 6 THEN 'VIERNES'
+                   WHEN 7 THEN 'SABADO'
+               END
+             ORDER BY hh.hora_inicio ASC
+             LIMIT 1
+         )
          WHERE ag.alumno_id = :alumno_id
            AND ag.fecha_baja IS NULL
+           AND sc.fecha < CURDATE()
+           AND NOT EXISTS (
+               SELECT 1
+               FROM justificaciones j
+               WHERE j.sesion_clase_id = sc.id
+                 AND j.alumno_id = ag.alumno_id
+           )
          ORDER BY sc.fecha DESC, h.hora_inicio ASC
          LIMIT 100"
     );
@@ -800,6 +1010,77 @@ if ($action === 'studentJustificationSessions') {
     $sessions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode(['success' => true, 'message' => 'OK', 'data' => $sessions]);
+    exit;
+}
+
+if ($action === 'studentJustifications') {
+    $alumnoId = (int)($body['alumno_id'] ?? 0);
+    if ($alumnoId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Alumno no válido.']);
+        exit;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT j.id,
+                j.alumno_id,
+                j.sesion_clase_id,
+                j.motivo,
+                j.evidencia,
+                j.estatus,
+                j.created_at,
+                j.fecha_revision,
+                sc.fecha AS sesion_fecha,
+                CASE DAYOFWEEK(sc.fecha)
+                   WHEN 1 THEN 'DOMINGO'
+                   WHEN 2 THEN 'LUNES'
+                   WHEN 3 THEN 'MARTES'
+                   WHEN 4 THEN 'MIERCOLES'
+                   WHEN 5 THEN 'JUEVES'
+                   WHEN 6 THEN 'VIERNES'
+                   WHEN 7 THEN 'SABADO'
+                END AS dia_sesion,
+                h.hora_inicio,
+                h.hora_fin,
+                g.nombre AS grupo_nombre,
+                g.semestre,
+                g.turno,
+                m.clave AS materia_clave,
+                m.nombre AS materia_nombre,
+                ma.nombre AS maestro_nombre,
+                ma.apellido_paterno,
+                ma.apellido_materno
+         FROM justificaciones j
+         INNER JOIN sesiones_clase sc ON sc.id = j.sesion_clase_id
+         INNER JOIN grupo_materia_maestro gmm ON gmm.id = sc.grupo_materia_maestro_id
+         INNER JOIN grupo_materias gm ON gm.id = gmm.grupo_materia_id
+         INNER JOIN grupos g ON g.id = gm.grupo_id
+         INNER JOIN materias m ON m.id = gm.materia_id
+         LEFT JOIN maestros ma ON ma.id = gmm.maestro_id
+         LEFT JOIN horarios h ON h.id = (
+             SELECT hh.id
+             FROM horarios hh
+             WHERE hh.grupo_materia_maestro_id = gmm.id
+               AND hh.activo = 1
+               AND hh.dia_semana = CASE DAYOFWEEK(sc.fecha)
+                   WHEN 1 THEN 'DOMINGO'
+                   WHEN 2 THEN 'LUNES'
+                   WHEN 3 THEN 'MARTES'
+                   WHEN 4 THEN 'MIERCOLES'
+                   WHEN 5 THEN 'JUEVES'
+                   WHEN 6 THEN 'VIERNES'
+                   WHEN 7 THEN 'SABADO'
+               END
+             ORDER BY hh.hora_inicio ASC
+             LIMIT 1
+         )
+         WHERE j.alumno_id = :alumno_id
+         ORDER BY j.id DESC"
+    );
+    $stmt->bindValue(':alumno_id', $alumnoId, PDO::PARAM_INT);
+    $stmt->execute();
+    $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    echo json_encode(['success' => true, 'message' => 'OK', 'data' => $items]);
     exit;
 }
 
