@@ -16,6 +16,32 @@ class Alumno {
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    public function readPaginated($search = '', $page = 1, $perPage = 10) {
+        $offset = max(0, ($page - 1) * $perPage);
+        $query = "SELECT * FROM " . $this->table;
+
+        if ($search !== '') {
+            $query .= " WHERE matricula LIKE :search
+                        OR nombre LIKE :search
+                        OR apellido_paterno LIKE :search
+                        OR apellido_materno LIKE :search";
+        }
+
+        $query .= " ORDER BY id DESC LIMIT :limit OFFSET :offset";
+        $stmt = $this->conn->prepare($query);
+
+        if ($search !== '') {
+            $searchTerm = '%' . $search . '%';
+            $stmt->bindParam(':search', $searchTerm);
+        }
+
+        $stmt->bindValue(':limit', (int)$perPage, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function create(array $data) {
         $matricula = trim((string)($data['matricula'] ?? ''));
         $nombre = trim((string)($data['nombre'] ?? ''));

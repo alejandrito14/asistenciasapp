@@ -12,7 +12,7 @@ function renderMenu($c, $a) {
     <ul class="list-unstyled">
         
         <li>
-            <a href="?c=Dashboard" class="<?php echo ($c=='Dashboard') ? 'active' : ''; ?>">
+            <a href="?c=Dashboard" class="<?php echo ($c=='Dashboard' && $a=='index') ? 'active' : ''; ?>">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
         </li>
@@ -56,8 +56,13 @@ function renderMenu($c, $a) {
                 </a>
             </li>
             <li>
-                <a href="?c=Setting" class="<?php echo ($c=='Setting') ? 'active' : ''; ?>">
-                    <i class="bi bi-gear-fill"></i> Configuración
+                <a href="?c=Dashboard&a=attendances" class="<?php echo ($c=='Dashboard' && $a=='attendances') ? 'active' : ''; ?>">
+                    <i class="bi bi-check2-square"></i> Asistencias
+                </a>
+            </li>
+            <li>
+                <a href="?c=Dashboard&a=justifications" class="<?php echo ($c=='Dashboard' && $a=='justifications') ? 'active' : ''; ?>">
+                    <i class="bi bi-file-earmark-text"></i> Justificantes
                 </a>
             </li>
             <li>
@@ -66,13 +71,13 @@ function renderMenu($c, $a) {
                 </a>
             </li>
             <li>
-                <a href="?c=Dashboard&a=justifications" class="<?php echo ($c=='Dashboard' && $a=='justifications') ? 'active' : ''; ?>">
-                    <i class="bi bi-file-earmark-text"></i> Justificantes
+                <a href="?c=Setting" class="<?php echo ($c=='Setting') ? 'active' : ''; ?>">
+                    <i class="bi bi-gear-fill"></i> Configuración
                 </a>
             </li>
             
             <li class="text-muted small fw-bold px-3 mt-3 mb-1">REPORTES</li>
-            <li>
+            <li class="d-none">
                 <a href="?c=Report" class="<?php echo ($c=='Report' && $a!='history') ? 'active' : ''; ?>">
                     <i class="bi bi-file-earmark-excel"></i> Descargar Excel
                 </a>

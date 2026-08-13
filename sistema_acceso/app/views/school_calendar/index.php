@@ -107,13 +107,26 @@
             <form method="POST" action="?c=SchoolCalendar&a=store">
                 <div class="modal-body">
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Fecha inicio</label>
-                            <input type="date" name="fecha_inicio" class="form-control" required>
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Tipo de fecha</label>
+                            <div class="d-flex gap-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="modo_fecha" id="modo_unico" value="unico" checked>
+                                    <label class="form-check-label" for="modo_unico">Solo un día</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="modo_fecha" id="modo_rango" value="rango">
+                                    <label class="form-check-label" for="modo_rango">Rango de fechas</label>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label">Fecha inicio</label>
+                            <input type="date" name="fecha_inicio" class="form-control" id="fecha_inicio" required>
+                        </div>
+                        <div class="col-md-6" id="fecha_fin_wrap" style="display:none;">
                             <label class="form-label">Fecha fin</label>
-                            <input type="date" name="fecha_fin" class="form-control" required>
+                            <input type="date" name="fecha_fin" class="form-control" id="fecha_fin">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Tipo</label>
@@ -148,5 +161,30 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const modoUnico = document.getElementById('modo_unico');
+    const modoRango = document.getElementById('modo_rango');
+    const fechaInicio = document.getElementById('fecha_inicio');
+    const fechaFin = document.getElementById('fecha_fin');
+    const fechaFinWrap = document.getElementById('fecha_fin_wrap');
+
+    function syncCalendarMode() {
+        const isRange = modoRango.checked;
+        fechaFinWrap.style.display = isRange ? 'block' : 'none';
+        fechaFin.required = isRange;
+        if (!isRange) {
+            fechaFin.value = fechaInicio.value;
+        }
+    }
+
+    modoUnico.addEventListener('change', syncCalendarMode);
+    modoRango.addEventListener('change', syncCalendarMode);
+    fechaInicio.addEventListener('change', () => {
+        if (modoUnico.checked) {
+            fechaFin.value = fechaInicio.value;
+        }
+    });
+    syncCalendarMode();
+</script>
 </body>
 </html>

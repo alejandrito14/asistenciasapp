@@ -35,10 +35,15 @@ class SchoolCalendarController {
         $data = [
             'fecha_inicio' => trim((string)($_POST['fecha_inicio'] ?? '')),
             'fecha_fin' => trim((string)($_POST['fecha_fin'] ?? '')),
+            'modo_fecha' => trim((string)($_POST['modo_fecha'] ?? 'unico')),
             'tipo' => trim((string)($_POST['tipo'] ?? '')),
             'descripcion' => trim((string)($_POST['descripcion'] ?? '')),
             'activo' => isset($_POST['activo']) ? 1 : 0,
         ];
+
+        if ($data['modo_fecha'] === 'unico' && $data['fecha_inicio'] !== '') {
+            $data['fecha_fin'] = $data['fecha_inicio'];
+        }
 
         if ($data['fecha_inicio'] !== '' && $data['fecha_fin'] !== '' && $data['tipo'] !== '') {
             $this->model->create($data);
@@ -70,10 +75,15 @@ class SchoolCalendarController {
             'id' => (int)($_POST['id'] ?? 0),
             'fecha_inicio' => trim((string)($_POST['fecha_inicio'] ?? '')),
             'fecha_fin' => trim((string)($_POST['fecha_fin'] ?? '')),
+            'modo_fecha' => trim((string)($_POST['modo_fecha'] ?? 'unico')),
             'tipo' => trim((string)($_POST['tipo'] ?? '')),
             'descripcion' => trim((string)($_POST['descripcion'] ?? '')),
             'activo' => isset($_POST['activo']) ? 1 : 0,
         ];
+
+        if ($data['modo_fecha'] === 'unico' && $data['fecha_inicio'] !== '') {
+            $data['fecha_fin'] = $data['fecha_inicio'];
+        }
 
         if ($data['id'] > 0 && $data['fecha_inicio'] !== '' && $data['fecha_fin'] !== '' && $data['tipo'] !== '') {
             $this->model->update($data);

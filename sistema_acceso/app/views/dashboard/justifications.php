@@ -21,6 +21,14 @@
         </nav>
 
         <div class="container-fluid p-4">
+            <div class="d-flex justify-content-end mb-3">
+                <form action="?c=Dashboard&a=exportJustifications" method="POST" class="m-0">
+                    <button type="submit" class="btn btn-success shadow">
+                        <i class="bi bi-download me-2"></i> Exportar Excel
+                    </button>
+                </form>
+            </div>
+
             <div class="card shadow border-0">
                 <div class="card-header bg-white py-3">
                     <h5 class="mb-0 fw-bold text-secondary"><i class="bi bi-file-earmark-text"></i> Listado completo</h5>
