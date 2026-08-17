@@ -54,8 +54,7 @@ foreach ($sessions as $session) {
         continue;
     }
 
-    $minutesAfter = (int)($session['minutos_despues'] ?? 15);
-    $closeLimit = (clone $sessionEnd)->modify("+{$minutesAfter} minutes");
+    $closeLimit = clone $sessionEnd;
 
     if ($now < $closeLimit) {
         continue;

@@ -64,7 +64,7 @@ class ScheduleController {
             'activo' => isset($_POST['activo']) ? (int)$_POST['activo'] : 1,
         ];
 
-        $diasValidos = ['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO'];
+        $diasValidos = ['DOMINGO','LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO'];
         if ($data['grupo_materia_maestro_id'] > 0 && in_array($data['dia_semana'], $diasValidos, true) && $data['hora_inicio'] !== '' && $data['hora_fin'] !== '') {
             $this->model->create($data);
             header("Location: ?c=Schedule&msg=creado");
@@ -117,7 +117,7 @@ class ScheduleController {
             'activo' => isset($_POST['activo']) ? (int)$_POST['activo'] : 1,
         ];
 
-        $diasValidos = ['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO'];
+        $diasValidos = ['DOMINGO','LUNES','MARTES','MIERCOLES','JUEVES','VIERNES','SABADO'];
         if ($data['id'] > 0 && $data['grupo_materia_maestro_id'] > 0 && in_array($data['dia_semana'], $diasValidos, true) && $data['hora_inicio'] !== '' && $data['hora_fin'] !== '') {
             $this->model->update($data);
             header("Location: ?c=Schedule&msg=actualizado");

@@ -99,6 +99,7 @@
                             <label class="form-label fw-bold">Día de la semana</label>
                             <select name="dia_semana" class="form-select" required>
                                 <option value="">-- Seleccionar --</option>
+                                <option value="DOMINGO">Domingo</option>
                                 <option value="LUNES">Lunes</option>
                                 <option value="MARTES">Martes</option>
                                 <option value="MIERCOLES">Miércoles</option>

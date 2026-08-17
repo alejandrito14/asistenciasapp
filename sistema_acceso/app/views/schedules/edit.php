@@ -36,6 +36,7 @@
                                 <div class="col-md-4">
                                     <label class="form-label fw-bold">Día de la semana</label>
                                     <select name="dia_semana" class="form-select" required>
+                                        <option value="DOMINGO" <?php echo (($item['dia_semana'] ?? '') === 'DOMINGO') ? 'selected' : ''; ?>>Domingo</option>
                                         <option value="LUNES" <?php echo (($item['dia_semana'] ?? '') === 'LUNES') ? 'selected' : ''; ?>>Lunes</option>
                                         <option value="MARTES" <?php echo (($item['dia_semana'] ?? '') === 'MARTES') ? 'selected' : ''; ?>>Martes</option>
                                         <option value="MIERCOLES" <?php echo (($item['dia_semana'] ?? '') === 'MIERCOLES') ? 'selected' : ''; ?>>Miércoles</option>

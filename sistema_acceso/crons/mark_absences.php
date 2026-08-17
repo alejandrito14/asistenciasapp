@@ -72,8 +72,7 @@ foreach ($sessions as $session) {
         continue;
     }
 
-    $minutesAfter = (int)($session['minutos_despues'] ?? 15);
-    $windowEnd = (clone $sessionEnd)->modify("+{$minutesAfter} minutes");
+    $windowEnd = clone $sessionEnd;
     if ($now <= $windowEnd) {
         continue;
     }
