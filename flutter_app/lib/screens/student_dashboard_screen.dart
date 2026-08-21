@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../models/auth_user.dart';
 import '../services/auth_service.dart';
 import '../services/dashboard_service.dart';
+import 'group_schedule_screen.dart';
 import 'justification_screen.dart';
 import 'login_screen.dart';
+import 'student_justifications_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   final AuthUser user;
@@ -67,6 +69,41 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     });
   }
 
+  Future<void> _openGroupSchedule() async {
+    final grupoId = _selectedGroupId ?? 0;
+    if (grupoId <= 0 || _alumnoId == null) return;
+
+    final result = await DashboardService.studentGroupSchedule(
+      alumnoId: _alumnoId!,
+      grupoId: grupoId,
+    );
+    if (!mounted) return;
+
+    if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+      return;
+    }
+
+    String groupName = 'Grupo';
+    for (final item in _myGroups) {
+      if ((item['grupo_id'] as num?)?.toInt() == grupoId) {
+        groupName = (item['grupo_nombre'] ?? 'Grupo').toString();
+        break;
+      }
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GroupScheduleScreen(
+          groupName: groupName,
+          scheduleItems: result.data ?? <dynamic>[],
+        ),
+      ),
+    );
+  }
+
   Future<void> _openSubjectModal(Map<String, dynamic> subject) async {
     final grupoId = _selectedGroupId ?? 0;
     final materiaId = (subject['id'] as num?)?.toInt() ?? 0;
@@ -99,11 +136,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       builder: (context) {
         final schedule = _selectedSchedule;
         final sessionStatus = (schedule?['sesion_estatus'] ?? '').toString().toUpperCase();
+        final attendanceState = (schedule?['estado_actual'] ?? '').toString().trim().toUpperCase();
         final attendanceRegistered = schedule?['asistencia_registrada'] == true;
+        final faltaRegistered = schedule?['falta_registrada'] == true || attendanceState == 'FALTA';
+        final justifiedRegistered = attendanceState == 'JUSTIFICADA' || attendanceState == 'JUSTIFICADO';
+        final hasAnyRecord = attendanceRegistered || faltaRegistered || justifiedRegistered;
         final canRegister = schedule != null &&
             schedule.isNotEmpty &&
             sessionStatus == 'ABIERTA' &&
-            !attendanceRegistered;
+            !hasAnyRecord;
 
         return Padding(
           padding: EdgeInsets.only(
@@ -154,52 +195,63 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  attendanceRegistered
-                      ? 'Ya registraste tu asistencia para esta clase.'
-                      : sessionStatus == 'ABIERTA'
-                          ? 'La sesión está abierta y ya puedes registrar asistencia.'
-                          : 'La sesión aún no está abierta por el maestro.',
+                  faltaRegistered
+                      ? 'Se registró una falta para esta clase.'
+                      : attendanceRegistered
+                          ? 'Ya registraste tu asistencia para esta clase.'
+                          : justifiedRegistered
+                              ? 'La falta fue justificada para esta clase.'
+                              : sessionStatus == 'ABIERTA'
+                                  ? 'La sesión está abierta y ya puedes registrar asistencia.'
+                                  : 'La sesión aún no está abierta por el maestro.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: attendanceRegistered
-                        ? const Color(0xFF1565C0)
-                        : sessionStatus == 'ABIERTA'
-                            ? const Color(0xFF2E7D32)
-                            : const Color(0xFFB00020),
+                    color: faltaRegistered
+                        ? const Color(0xFFB00020)
+                        : attendanceRegistered
+                            ? const Color(0xFF1565C0)
+                            : justifiedRegistered
+                                ? const Color(0xFF6A1B9A)
+                                : sessionStatus == 'ABIERTA'
+                                    ? const Color(0xFF2E7D32)
+                                    : const Color(0xFFB00020),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 16),
-                SizedBox(
-                  height: 54,
-                  child: ElevatedButton.icon(
-                    onPressed: canRegister
-                        ? () async {
-                            final result = await DashboardService.studentRegisterAttendance(
-                              alumnoId: _alumnoId ?? 0,
-                              grupoId: grupoId,
-                              materiaId: materiaId,
-                            );
-                            if (!context.mounted) return;
-                            Navigator.of(context).pop();
-                            ScaffoldMessenger.of(this.context).showSnackBar(
-                              SnackBar(content: Text(result.message)),
-                            );
-                          }
-                        : null,
-                    icon: Icon(attendanceRegistered ? Icons.check_circle : Icons.check_circle_outline),
-                    label: Text(
-                      attendanceRegistered ? 'ASISTENCIA REGISTRADA' : 'REGISTRAR ASISTENCIA',
+                if (!hasAnyRecord)
+                  SizedBox(
+                    height: 54,
+                    child: ElevatedButton.icon(
+                      onPressed: canRegister
+                          ? () async {
+                              final result = await DashboardService.studentRegisterAttendance(
+                                alumnoId: _alumnoId ?? 0,
+                                grupoId: grupoId,
+                                materiaId: materiaId,
+                              );
+                              if (!context.mounted) return;
+                              Navigator.of(context).pop();
+                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                SnackBar(content: Text(result.message)),
+                              );
+                            }
+                          : null,
+                      icon: const Icon(Icons.check_circle_outline),
+                      label: const Text('REGISTRAR ASISTENCIA'),
                     ),
                   ),
-                ),
                 const SizedBox(height: 8),
                 Text(
-                  attendanceRegistered
-                      ? 'No necesitas volver a registrarla.'
-                      : sessionStatus == 'ABIERTA'
-                          ? 'Se registrará solo si estás dentro del día y la hora programados.'
-                          : 'Espera a que el maestro abra la sesión.',
+                  faltaRegistered
+                      ? 'Si crees que esta falta no corresponde, revisa el justificante.'
+                      : attendanceRegistered
+                          ? 'No necesitas volver a registrarla.'
+                          : justifiedRegistered
+                              ? 'La clase ya fue justificada.'
+                              : sessionStatus == 'ABIERTA'
+                                  ? 'Se registrará solo si estás dentro del día y la hora programados.'
+                                  : 'Espera a que el maestro abra la sesión.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
@@ -229,6 +281,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       _pinController.clear();
       await _load();
     }
+  }
+
+  Future<void> _openJustifications() async {
+    if ((_alumnoId ?? 0) <= 0) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StudentJustificationsScreen(
+          alumnoId: _alumnoId ?? 0,
+        ),
+      ),
+    );
   }
 
   Future<void> _confirmLogout() async {
@@ -270,16 +334,30 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('Cancelar'),
+                    child: SizedBox(
+                      height: 52,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF2E7D32),
+                          side: const BorderSide(color: Color(0xFF2E7D32)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text('Cancelar'),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: FilledButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: const Text('Cerrar sesión'),
+                    child: SizedBox(
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('Cerrar sesión'),
+                      ),
                     ),
                   ),
                 ],
@@ -310,7 +388,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Widget build(BuildContext context) {
     final headerGradient = _tabIndex == 0
         ? const LinearGradient(colors: [Color(0xFFEF6C00), Color(0xFFFFA726)])
-        : const LinearGradient(colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)]);
+        : const LinearGradient(colors: [Color(0xFFEF6C00), Color(0xFFFFA726)]);
     final dashboardView = _loading
         ? const Center(child: CircularProgressIndicator())
         : RefreshIndicator(
@@ -362,28 +440,43 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     (item) => Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        leading: CircleAvatar(
-                          backgroundColor: const Color(0xFF2E7D32).withOpacity(0.12),
-                          child: const Icon(Icons.groups_2_rounded, color: Color(0xFF2E7D32)),
-                        ),
-                        title: Text(
-                          item['grupo_nombre'] ?? '',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        subtitle: Text('${item['semestre'] ?? ''} | ${item['turno'] ?? ''}\nIngreso: ${item['fecha_ingreso'] ?? ''}'),
-                        trailing: const Icon(Icons.chevron_right),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
                         onTap: () => _loadSubjects((item['grupo_id'] as num?)?.toInt() ?? 0),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          leading: CircleAvatar(
+                            backgroundColor: const Color(0xFF2E7D32).withOpacity(0.12),
+                            child: const Icon(Icons.groups_2_rounded, color: Color(0xFF2E7D32)),
+                          ),
+                          title: Text(
+                            item['grupo_nombre'] ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Text('${item['semestre'] ?? ''} | ${item['turno'] ?? ''}\nIngreso: ${item['fecha_ingreso'] ?? ''}'),
+                          trailing: const Icon(Icons.chevron_right),
+                        ),
                       ),
                     ),
                   ),
                 ],
                 if (_selectedGroupId != null && _myGroups.isNotEmpty) ...[
                   const SizedBox(height: 24),
-                  Text(
-                    'Detalle del grupo',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Detalle del grupo',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _openGroupSchedule,
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        tooltip: 'Ver calendario',
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   if (_subjects.isEmpty)
@@ -466,7 +559,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             }
           },
           icon: const Icon(Icons.note_add_outlined),
-          label: const Text('Solicitar justificación'),
+          label: const Text('Solicitar justificante'),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
@@ -479,11 +572,82 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Alumno: ${widget.user.nombre}'),
+        titleSpacing: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Bienvenido',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            ),
+            Text(
+              widget.user.nombre,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: CircleAvatar(
+              backgroundColor: Colors.white.withOpacity(0.18),
+              child: const Icon(Icons.person, color: Colors.white),
+            ),
+          ),
+        ],
         flexibleSpace: Container(
           decoration: BoxDecoration(gradient: headerGradient),
         ),
         foregroundColor: Colors.white,
+      ),
+      drawer: Drawer(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Hola, ${widget.user.nombre}',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(widget.user.correo, style: TextStyle(color: Colors.grey.shade700)),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.dashboard_outlined),
+                title: const Text('Dashboard'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() => _tabIndex = 0);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.assignment_outlined),
+                title: const Text('Justificantes'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _openJustifications();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: const Text('Mi perfil'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() => _tabIndex = 1);
+                },
+              ),
+            ],
+          ),
+        ),
       ),
       body: IndexedStack(
         index: _tabIndex,

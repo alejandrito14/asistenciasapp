@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../services/dashboard_service.dart';
 
@@ -77,7 +80,7 @@ class _JustificationScreenState extends State<JustificationScreen> {
   }
 
   String _statusLabel(Map<String, dynamic> session) {
-    final status = (session['estado_nombre'] ?? session['estado_actual'] ?? 'Falta').toString();
+    final status = (session['estado_nombre'] ?? session['estado_actual'] ?? 'Falta').toString().trim();
     return status.isEmpty ? 'Falta' : status;
   }
 
@@ -126,6 +129,35 @@ class _JustificationScreenState extends State<JustificationScreen> {
     setState(() {
       _selectedFile = result.files.first;
     });
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final photo = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+    );
+    if (!mounted || photo == null) return;
+    final photoFile = File(photo.path);
+    final photoSize = await photoFile.length();
+
+    setState(() {
+      _selectedFile = PlatformFile(
+        name: photo.name.isNotEmpty ? photo.name : 'foto_justificacion.jpg',
+        size: photoSize,
+        path: photo.path,
+      );
+    });
+  }
+
+  bool _isImageFile(PlatformFile file) {
+    final name = file.name.toLowerCase();
+    return name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png') ||
+        name.endsWith('.webp') ||
+        name.endsWith('.gif') ||
+        name.endsWith('.bmp');
   }
 
   @override
@@ -217,34 +249,118 @@ class _JustificationScreenState extends State<JustificationScreen> {
                       }).toList(),
                     ),
                   const SizedBox(height: 16),
-                  FilledButton.tonalIcon(
-                    onPressed: _saving ? null : _pickFile,
-                    icon: const Icon(Icons.attach_file),
-                    label: Text(_selectedFile == null ? 'Adjuntar imagen o archivo' : 'Cambiar archivo'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          onPressed: _saving ? null : _pickImage,
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          label: const Text('Tomar foto'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          onPressed: _saving ? null : _pickFile,
+                          icon: const Icon(Icons.attach_file),
+                          label: const Text('Adjuntar archivo'),
+                        ),
+                      ),
+                    ],
                   ),
                   if (_selectedFile != null) ...[
                     const SizedBox(height: 8),
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.insert_drive_file_outlined),
-                        title: Text(_selectedFile!.name),
-                        subtitle: Text(
-                          _selectedFile!.size > 0
-                              ? '${(_selectedFile!.size / 1024).toStringAsFixed(1)} KB'
-                              : 'Archivo seleccionado',
+                    if (_selectedFile!.path != null && _isImageFile(_selectedFile!))
+                      GestureDetector(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) {
+                              return Dialog(
+                                insetPadding: const EdgeInsets.all(16),
+                                child: Stack(
+                                  children: [
+                                    InteractiveViewer(
+                                      minScale: 1,
+                                      maxScale: 4,
+                                      child: Image.file(
+                                        File(_selectedFile!.path!),
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 8,
+                                      right: 8,
+                                      child: Material(
+                                        color: Colors.black54,
+                                        shape: const CircleBorder(),
+                                        child: IconButton(
+                                          onPressed: () => Navigator.of(context).pop(),
+                                          icon: const Icon(Icons.close, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        },
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: Stack(
+                            children: [
+                              AspectRatio(
+                                aspectRatio: 1.2,
+                                child: Image.file(
+                                  File(_selectedFile!.path!),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Material(
+                                  color: Colors.black54,
+                                  shape: const CircleBorder(),
+                                  child: IconButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              _selectedFile = null;
+                                            });
+                                          },
+                                    icon: const Icon(Icons.close, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        trailing: IconButton(
-                          onPressed: _saving
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _selectedFile = null;
-                                  });
-                                },
-                          icon: const Icon(Icons.close),
+                      )
+                    else
+                      Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.insert_drive_file_outlined),
+                          title: const Text('Archivo adjunto'),
+                          subtitle: Text(
+                            _selectedFile!.size > 0
+                                ? '${(_selectedFile!.size / 1024).toStringAsFixed(1)} KB'
+                                : 'Archivo seleccionado',
+                          ),
+                          trailing: IconButton(
+                            onPressed: _saving
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _selectedFile = null;
+                                    });
+                                  },
+                            icon: const Icon(Icons.close),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                   const SizedBox(height: 16),
                   TextField(
@@ -262,9 +378,17 @@ class _JustificationScreenState extends State<JustificationScreen> {
                       color: const Color(0xFFE8F5E9),
                       child: Padding(
                         padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Falta seleccionada: ${_sessions.firstWhere((item) => (item['sesion_clase_id'] as num?)?.toInt() == _selectedSessionId, orElse: () => <String, dynamic>{})['materia_nombre'] ?? ''} | ${_formatDate(_sessions.firstWhere((item) => (item['sesion_clase_id'] as num?)?.toInt() == _selectedSessionId, orElse: () => <String, dynamic>{})['fecha'])}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        child: Builder(
+                          builder: (context) {
+                            final selected = _sessions.firstWhere(
+                              (item) => (item['sesion_clase_id'] as num?)?.toInt() == _selectedSessionId,
+                              orElse: () => <String, dynamic>{},
+                            );
+                            return Text(
+                              'Falta seleccionada: ${selected['materia_nombre'] ?? ''} | ${_formatDate(selected['fecha'])}',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            );
+                          },
                         ),
                       ),
                     ),

@@ -89,15 +89,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           tooltip: 'Regresar',
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'Regresar',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1F1F1F),
-                        ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 8),

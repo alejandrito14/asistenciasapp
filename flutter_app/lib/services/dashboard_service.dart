@@ -180,11 +180,83 @@ class DashboardService {
     );
   }
 
+  static Future<ApiResponse<List<dynamic>>> teacherSessionJustifications({
+    required int sesionClaseId,
+  }) async {
+    final response = await _post(
+      action: 'teacherSessionJustifications',
+      body: {'sesion_clase_id': sesionClaseId},
+    );
+    if (!response.success) {
+      return ApiResponse<List<dynamic>>(success: false, message: response.message);
+    }
+    return ApiResponse<List<dynamic>>(
+      success: true,
+      message: response.message,
+      data: (response.data as List<dynamic>?) ?? <dynamic>[],
+    );
+  }
+
   static Future<ApiResponse<List<dynamic>>> studentJustificationSessions({
     required int alumnoId,
   }) async {
     final response = await _post(
       action: 'studentJustificationSessions',
+      body: {'alumno_id': alumnoId},
+    );
+    if (!response.success) {
+      return ApiResponse<List<dynamic>>(success: false, message: response.message);
+    }
+    return ApiResponse<List<dynamic>>(
+      success: true,
+      message: response.message,
+      data: (response.data as List<dynamic>?) ?? <dynamic>[],
+    );
+  }
+
+  static Future<ApiResponse<List<dynamic>>> teacherJustifications({
+    required int maestroId,
+  }) async {
+    final response = await _post(
+      action: 'teacherJustifications',
+      body: {'maestro_id': maestroId},
+    );
+    if (!response.success) {
+      return ApiResponse<List<dynamic>>(success: false, message: response.message);
+    }
+    return ApiResponse<List<dynamic>>(
+      success: true,
+      message: response.message,
+      data: (response.data as List<dynamic>?) ?? <dynamic>[],
+    );
+  }
+
+  static Future<ApiResponse<Map<String, dynamic>>> teacherJustificationUpdate({
+    required int justificationId,
+    required String estatus,
+  }) async {
+    final response = await _post(
+      action: 'teacherJustificationUpdate',
+      body: {
+        'justification_id': justificationId,
+        'estatus': estatus,
+      },
+    );
+    if (!response.success) {
+      return ApiResponse<Map<String, dynamic>>(success: false, message: response.message);
+    }
+    return ApiResponse<Map<String, dynamic>>(
+      success: true,
+      message: response.message,
+      data: (response.data as Map<String, dynamic>?) ?? <String, dynamic>{},
+    );
+  }
+
+  static Future<ApiResponse<List<dynamic>>> studentJustifications({
+    required int alumnoId,
+  }) async {
+    final response = await _post(
+      action: 'studentJustifications',
       body: {'alumno_id': alumnoId},
     );
     if (!response.success) {
@@ -279,7 +351,16 @@ class DashboardService {
       return const ApiResponse<dynamic>(success: false, message: 'No se pudo comunicar con el servidor.');
     }
 
-    final decoded = jsonDecode(response.body);
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {
+      return ApiResponse<dynamic>(
+        success: false,
+        message: 'El servidor respondió con un formato inválido.',
+        data: response.body,
+      );
+    }
     if (decoded is! Map<String, dynamic>) {
       return const ApiResponse<dynamic>(success: false, message: 'Respuesta inválida del servidor.');
     }
