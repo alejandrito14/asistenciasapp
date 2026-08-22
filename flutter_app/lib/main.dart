@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'models/auth_user.dart';
 import 'services/auth_service.dart';
@@ -16,9 +17,20 @@ class AppAsistenciasApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'App Asistencias',
+      return MaterialApp(
+      title: 'ArpiaCheck',
       debugShowCheckedModeBanner: false,
+      locale: const Locale('es', 'MX'),
+      supportedLocales: const [
+        Locale('es', 'MX'),
+        Locale('es', 'ES'),
+        Locale('en', 'US'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFEF6C00),

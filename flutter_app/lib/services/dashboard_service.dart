@@ -41,6 +41,23 @@ class DashboardService {
     );
   }
 
+  static Future<ApiResponse<Map<String, dynamic>>> schoolCalendarStatus({
+    required String date,
+  }) async {
+    final response = await _post(
+      action: 'schoolCalendarStatus',
+      body: {'date': date},
+    );
+    if (!response.success) {
+      return ApiResponse<Map<String, dynamic>>(success: false, message: response.message);
+    }
+    return ApiResponse<Map<String, dynamic>>(
+      success: true,
+      message: response.message,
+      data: (response.data as Map<String, dynamic>?) ?? <String, dynamic>{},
+    );
+  }
+
   static Future<ApiResponse<Map<String, dynamic>>> studentDashboard(int alumnoId) async {
     final response = await _post(action: 'studentDashboard', body: {'alumno_id': alumnoId});
     if (!response.success) {

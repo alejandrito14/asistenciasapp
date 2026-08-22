@@ -10,6 +10,12 @@
 .pub-cache/
 build/
 
+**/build/
+.dart_tool/
+.idea/
+.packages
+*.iml
+
 # Generated
 **/generated_plugin_registrant.dart
 

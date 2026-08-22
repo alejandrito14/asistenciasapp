@@ -39,6 +39,24 @@ class AuthUser {
     };
   }
 
+  AuthUser copyWith({
+    int? id,
+    String? nombre,
+    String? correo,
+    String? rol,
+    Map<String, dynamic>? maestro,
+    Map<String, dynamic>? alumno,
+  }) {
+    return AuthUser(
+      id: id ?? this.id,
+      nombre: nombre ?? this.nombre,
+      correo: correo ?? this.correo,
+      rol: rol ?? this.rol,
+      maestro: maestro ?? this.maestro,
+      alumno: alumno ?? this.alumno,
+    );
+  }
+
   static AuthUser? fromEncoded(String? value) {
     if (value == null || value.isEmpty) return null;
     final decoded = jsonDecode(value);

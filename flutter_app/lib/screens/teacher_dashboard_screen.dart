@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../config/api_config.dart';
 import '../models/auth_user.dart';
 import '../services/auth_service.dart';
 import '../services/dashboard_service.dart';
@@ -23,10 +27,14 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
   String? _message;
   List<dynamic> _items = [];
   int _tabIndex = 0;
+  String? _profilePhotoPath;
+  String? _localPhotoPath;
+  bool _uploadingPhoto = false;
 
   @override
   void initState() {
     super.initState();
+    _profilePhotoPath = widget.user.maestro?['photo_path']?.toString();
     _load();
   }
 
@@ -285,6 +293,271 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     }
   }
 
+  Future<void> _confirmDeleteAccount() async {
+    final shouldDelete = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Eliminación de cuenta',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Al eliminar la cuenta ya no tendrá acceso en la aplicación. ¿Está seguro de realizar la acción?',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF2E7D32),
+                          side: const BorderSide(color: Color(0xFF2E7D32)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text('Cancelar'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFB00020),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Eliminar'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (shouldDelete != true) return;
+
+    final result = await AuthService.deleteAccount(
+      userId: widget.user.id,
+      correo: widget.user.correo,
+      rol: widget.user.rol,
+    );
+
+    if (!mounted) return;
+
+    if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+      return;
+    }
+
+    await AuthService.clearSession();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
+  ImageProvider? _profileImageProvider() {
+    if (_localPhotoPath != null && _localPhotoPath!.isNotEmpty) {
+      return FileImage(File(_localPhotoPath!));
+    }
+
+    final path = _profilePhotoPath?.trim();
+    if (path == null || path.isEmpty) return null;
+
+    final imageUrl = path.startsWith('http')
+        ? path
+        : ApiConfig.resolveServerUrl(path).toString();
+    return NetworkImage(imageUrl);
+  }
+
+  Future<void> _chooseProfilePhoto() async {
+    if (_uploadingPhoto) return;
+
+    final source = await showModalBottomSheet<ImageSource?>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Tomar foto'),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Elegir de galería'),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
+    final picker = ImagePicker();
+    final photo = await picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 1200,
+    );
+
+    if (!mounted || photo == null) return;
+
+    setState(() {
+      _uploadingPhoto = true;
+      _localPhotoPath = photo.path;
+    });
+
+    final result = await AuthService.updateProfilePhoto(
+      userId: widget.user.id,
+      rol: widget.user.rol,
+      filePath: photo.path,
+      fileName: photo.name.isNotEmpty ? photo.name : 'foto_perfil.jpg',
+    );
+
+    if (!mounted) return;
+
+    if (!result.success) {
+      setState(() {
+        _uploadingPhoto = false;
+        _localPhotoPath = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+      return;
+    }
+
+    final responseData = result.data ?? <String, dynamic>{};
+    final profileData = responseData['profile'];
+    final photoPath = (responseData['photo_path'] ??
+            (profileData is Map<String, dynamic> ? profileData['photo_path'] : null))
+        ?.toString();
+
+    if (photoPath != null && photoPath.isNotEmpty) {
+      setState(() {
+        _profilePhotoPath = photoPath;
+        _localPhotoPath = null;
+      });
+
+      final updatedMaestro = widget.user.maestro == null
+          ? null
+          : {
+              ...widget.user.maestro!,
+              'photo_path': photoPath,
+            };
+      final updatedUser = widget.user.copyWith(maestro: updatedMaestro);
+      await AuthService.saveSession(updatedUser);
+    } else {
+      setState(() {
+        _localPhotoPath = null;
+      });
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _uploadingPhoto = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message)),
+    );
+  }
+
+  Widget _buildProfileAvatar() {
+    final imageProvider = _profileImageProvider();
+
+    return GestureDetector(
+      onTap: _chooseProfilePhoto,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CircleAvatar(
+            radius: 36,
+            backgroundColor: const Color(0xFF2E7D32).withOpacity(0.12),
+            backgroundImage: imageProvider,
+            child: imageProvider == null
+                ? const Icon(Icons.person, color: Color(0xFF2E7D32), size: 34)
+                : null,
+          ),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF6C00),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: const Icon(Icons.photo_camera_rounded, size: 14, color: Colors.white),
+            ),
+          ),
+          if (_uploadingPhoto)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.35),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final headerGradient = _tabIndex == 0
@@ -440,10 +713,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: const Color(0xFF2E7D32).withOpacity(0.12),
-              child: const Icon(Icons.person, color: Color(0xFF2E7D32)),
-            ),
+            leading: _buildProfileAvatar(),
             title: Text(widget.user.nombre),
             subtitle: Text(widget.user.correo),
           ),
@@ -472,6 +742,19 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
           onPressed: _confirmLogout,
           icon: const Icon(Icons.logout),
           label: const Text('Cerrar sesión'),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _confirmDeleteAccount,
+          icon: const Icon(Icons.delete_outline),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: const Color(0xFFB00020),
+            side: const BorderSide(color: Color(0xFFB00020)),
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          label: const Text('Eliminar cuenta'),
         ),
       ],
     );

@@ -5,6 +5,7 @@ class AppTextField extends StatefulWidget {
   final String label;
   final bool obscureText;
   final TextInputType keyboardType;
+  final bool enabled;
 
   const AppTextField({
     super.key,
@@ -12,6 +13,7 @@ class AppTextField extends StatefulWidget {
     required this.label,
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
+    this.enabled = true,
   });
 
   @override
@@ -33,6 +35,7 @@ class _AppTextFieldState extends State<AppTextField> {
       controller: widget.controller,
       obscureText: _obscureText,
       keyboardType: widget.keyboardType,
+      enabled: widget.enabled,
       decoration: InputDecoration(
         labelText: widget.label,
         suffixIcon: widget.obscureText

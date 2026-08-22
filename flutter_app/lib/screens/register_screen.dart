@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_text_field.dart';
+import 'verify_account_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -18,37 +19,93 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _apellidoMaternoController = TextEditingController();
   final _telefonoController = TextEditingController();
   final _correoController = TextEditingController();
+  final _tutorNombreController = TextEditingController();
+  final _tutorApellidoPaternoController = TextEditingController();
+  final _tutorApellidoMaternoController = TextEditingController();
+  final _tutorTelefonoController = TextEditingController();
+  final _tutorCorreoController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isTeacher = false;
   String? _message;
 
-  Future<void> _registerAlumno() async {
+  void _setTeacherMode(bool value) {
+    setState(() {
+      _isTeacher = value;
+      if (_isTeacher) {
+        _matriculaController.clear();
+        _tutorNombreController.clear();
+        _tutorApellidoPaternoController.clear();
+        _tutorApellidoMaternoController.clear();
+        _tutorTelefonoController.clear();
+        _tutorCorreoController.clear();
+      }
+    });
+  }
+
+  Future<void> _registerAccount() async {
     setState(() {
       _isLoading = true;
       _message = null;
     });
 
-    final result = await AuthService.registerAlumno(
-      matricula: _matriculaController.text.trim(),
-      nombre: _nombreController.text.trim(),
-      apellidoPaterno: _apellidoPaternoController.text.trim(),
-      apellidoMaterno: _apellidoMaternoController.text.trim(),
-      telefono: _telefonoController.text.trim(),
-      correo: _correoController.text.trim(),
-      password: _passwordController.text,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-      _message = result.message;
-    });
-
-    if (result.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
+    try {
+      final result = await AuthService.registerUser(
+        matricula: _matriculaController.text.trim(),
+        nombre: _nombreController.text.trim(),
+        apellidoPaterno: _apellidoPaternoController.text.trim(),
+        apellidoMaterno: _apellidoMaternoController.text.trim(),
+        telefono: _telefonoController.text.trim(),
+        correo: _correoController.text.trim(),
+        tutorNombre: _isTeacher ? '' : _tutorNombreController.text.trim(),
+        tutorApellidoPaterno: _isTeacher ? '' : _tutorApellidoPaternoController.text.trim(),
+        tutorApellidoMaterno: _isTeacher ? '' : _tutorApellidoMaternoController.text.trim(),
+        tutorTelefono: _isTeacher ? '' : _tutorTelefonoController.text.trim(),
+        tutorCorreo: _isTeacher ? '' : _tutorCorreoController.text.trim(),
+        password: _passwordController.text,
+        rol: _isTeacher ? 'MAESTRO' : 'ALUMNO',
       );
+
+      if (!mounted) return;
+
+      setState(() {
+        _message = result.message;
+      });
+
+      if (result.success) {
+        final verificationRequired = result.data?['verification_required'] == true;
+        if (verificationRequired) {
+          final verificationSent = result.data?['verification_sent'] == true;
+          final userData = result.data?['user'];
+          final userId = userData is Map<String, dynamic> ? ((userData['id'] as num?)?.toInt() ?? 0) : 0;
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => VerifyAccountScreen(
+                userId: userId,
+                correo: _correoController.text.trim(),
+                password: _passwordController.text,
+                verificationSent: verificationSent,
+              ),
+            ),
+          );
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message)),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _message = 'Ocurrió un error al registrar. Intenta de nuevo.';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -72,9 +129,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             padding: const EdgeInsets.all(20),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
                   Row(
                     children: [
                       Material(
@@ -128,11 +185,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                           ),
                           const SizedBox(height: 24),
-                          AppTextField(
-                            controller: _matriculaController,
-                            label: 'Matrícula',
-                          ),
-                          const SizedBox(height: 14),
+                          if (!_isTeacher) ...[
+                            AppTextField(
+                              controller: _matriculaController,
+                              label: 'Matrícula',
+                            ),
+                            const SizedBox(height: 14),
+                          ],
                           AppTextField(
                             controller: _nombreController,
                             label: 'Nombre completo',
@@ -165,11 +224,63 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             label: 'Contraseña',
                             obscureText: true,
                           ),
+                          const SizedBox(height: 14),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: _isTeacher,
+                            onChanged: (value) => _setTeacherMode(value ?? false),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: const Text(
+                              'Soy maestro',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            subtitle: const Text('Desactiva los datos del tutor y registra la cuenta como maestro.'),
+                          ),
+                          if (!_isTeacher) ...[
+                            const SizedBox(height: 14),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Datos del tutor',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF1F1F1F),
+                                    ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            AppTextField(
+                              controller: _tutorNombreController,
+                              label: 'Nombre del tutor',
+                            ),
+                            const SizedBox(height: 14),
+                            AppTextField(
+                              controller: _tutorApellidoPaternoController,
+                              label: 'Apellido paterno del tutor',
+                            ),
+                            const SizedBox(height: 14),
+                            AppTextField(
+                              controller: _tutorApellidoMaternoController,
+                              label: 'Apellido materno del tutor',
+                            ),
+                            const SizedBox(height: 14),
+                            AppTextField(
+                              controller: _tutorTelefonoController,
+                              label: 'Teléfono del tutor',
+                              keyboardType: TextInputType.phone,
+                            ),
+                            const SizedBox(height: 14),
+                            AppTextField(
+                              controller: _tutorCorreoController,
+                              label: 'Correo electrónico del tutor',
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                          ],
                           const SizedBox(height: 24),
                           AppButton(
-                            label: 'Registrar alumno',
+                            label: _isTeacher ? 'Registrar maestro' : 'Registrar alumno',
                             isLoading: _isLoading,
-                            onPressed: _registerAlumno,
+                            onPressed: _registerAccount,
                           ),
                           if (_message != null) ...[
                             const SizedBox(height: 12),
