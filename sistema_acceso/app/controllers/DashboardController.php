@@ -232,6 +232,7 @@ class DashboardController {
     private function attendanceFiltersFromRequest() {
         $source = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : $_GET;
         return [
+            'fecha' => trim((string)($source['fecha'] ?? '')),
             'grupo_id' => trim((string)($source['grupo_id'] ?? '')),
             'materia_id' => trim((string)($source['materia_id'] ?? '')),
             'alumno_id' => trim((string)($source['alumno_id'] ?? '')),
@@ -293,6 +294,9 @@ class DashboardController {
         if (!empty($filters['grupo_id'])) {
             $conditions[] = "g.id = :grupo_id";
         }
+        if (!empty($filters['fecha'])) {
+            $conditions[] = "DATE(sc.fecha) = :fecha";
+        }
         if (!empty($filters['materia_id'])) {
             $conditions[] = "m.id = :materia_id";
         }
@@ -306,6 +310,9 @@ class DashboardController {
         $stmt = $this->db->prepare($query);
         if (!empty($filters['grupo_id'])) {
             $stmt->bindValue(':grupo_id', (int)$filters['grupo_id'], PDO::PARAM_INT);
+        }
+        if (!empty($filters['fecha'])) {
+            $stmt->bindValue(':fecha', $filters['fecha'], PDO::PARAM_STR);
         }
         if (!empty($filters['materia_id'])) {
             $stmt->bindValue(':materia_id', (int)$filters['materia_id'], PDO::PARAM_INT);

@@ -11,10 +11,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once '../app/config/db.php';
+require_once '../app/config/mail.php';
 require_once '../app/models/Usuario.php';
 require_once '../app/models/Maestro.php';
 require_once '../app/models/Alumno.php';
 require_once '../app/helpers/SchoolCalendarHelper.php';
+require_once __DIR__ . '/../app/tools/vendor/autoload.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -25,6 +27,81 @@ if (!$db) {
         'message' => 'No se pudo conectar a la base de datos.'
     ]);
     exit;
+}
+
+function generateVerificationCode(): string {
+    return (string)random_int(100000, 999999);
+}
+
+function apiLog(string $message, array $context = []): void {
+    $line = '[' . date('Y-m-d H:i:s') . '] ' . $message;
+    if (!empty($context)) {
+        $line .= ' ' . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    error_log($line);
+
+    $logDir = __DIR__ . '/../storage/logs';
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0775, true);
+    }
+    @file_put_contents($logDir . '/api.log', $line . PHP_EOL, FILE_APPEND);
+}
+
+function sendVerificationCodeEmail(string $correo, string $nombre, string $code): bool {
+    $config = getMailConfig();
+    $safeName = $nombre !== '' ? $nombre : 'usuario';
+    $subject = 'Código de verificación de tu cuenta';
+    $message = "Hola {$safeName},\n\n"
+        . "Tu código de verificación es: {$code}\n\n"
+        . "Este código vence en 15 minutos.\n"
+        . "Si no solicitaste este registro, puedes ignorarlo.\n";
+
+    try {
+        apiLog('Intentando enviar código de verificación', [
+            'correo' => $correo,
+            'from' => $config['from_email'],
+            'smtp_host' => $config['host'] !== '' ? $config['host'] : 'mail()',
+        ]);
+
+        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+        $mail->CharSet = 'UTF-8';
+        $mail->isHTML(false);
+        $mail->setFrom($config['from_email'], $config['from_name']);
+        $mail->addAddress($correo, $safeName);
+        $mail->Subject = $subject;
+        $mail->Body = $message;
+        $mail->AltBody = $message;
+
+        if ($config['host'] !== '' && $config['username'] !== '') {
+            $mail->isSMTP();
+            $mail->Host = $config['host'];
+            $mail->SMTPAuth = true;
+            $mail->Username = $config['username'];
+            $mail->Password = $config['password'];
+            $mail->Port = $config['port'];
+
+            if ($config['encryption'] === 'ssl') {
+                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+            } elseif ($config['encryption'] === 'tls') {
+                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            }
+        } else {
+            $mail->isMail();
+        }
+
+        $mail->send();
+        apiLog('Código de verificación enviado', [
+            'correo' => $correo,
+        ]);
+        return true;
+    } catch (Throwable $e) {
+        apiLog('sendVerificationCodeEmail failed', [
+            'correo' => $correo,
+            'error' => $e->getMessage(),
+        ]);
+        return false;
+    }
 }
 
 $rawInput = file_get_contents('php://input');
@@ -48,15 +125,24 @@ if ($action === 'login') {
     }
 
     $usuarioModel = new Usuario($db);
-    $user = $usuarioModel->login($correo, $password);
+    $loginResult = $usuarioModel->login($correo, $password);
 
-    if (!$user) {
+    if (!($loginResult['success'] ?? false)) {
+        $reason = (string)($loginResult['reason'] ?? 'inactive');
+        $message = match ($reason) {
+            'pending_verification' => 'Tu cuenta está pendiente de verificación. Revisa tu correo.',
+            'invalid_password' => 'Contraseña incorrecta.',
+            'not_found' => 'El correo no está registrado.',
+            default => 'Credenciales inválidas o usuario inactivo.',
+        };
         echo json_encode([
             'success' => false,
-            'message' => 'Credenciales inválidas o usuario inactivo.'
+            'message' => $message
         ]);
         exit;
     }
+
+    $user = $loginResult['user'];
 
     $payloadUser = [
         'id' => (int)$user['id'],
@@ -66,15 +152,24 @@ if ($action === 'login') {
     ];
 
     if ($user['rol'] === 'MAESTRO') {
-        $stmt = $db->prepare("SELECT id, usuario_id, nombre, apellido_paterno, apellido_materno, telefono, correo, activo FROM maestros WHERE usuario_id = :usuario_id LIMIT 1");
+        $stmt = $db->prepare("SELECT id, usuario_id, nombre, apellido_paterno, apellido_materno, telefono, correo, photo_path, activo FROM maestros WHERE usuario_id = :usuario_id LIMIT 1");
         $stmt->bindValue(':usuario_id', (int)$user['id'], PDO::PARAM_INT);
         $stmt->execute();
         $payloadUser['maestro'] = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     } elseif ($user['rol'] === 'ALUMNO') {
-        $stmt = $db->prepare("SELECT id, matricula, nombre, apellido_paterno, apellido_materno, telefono, correo, activo FROM alumnos WHERE correo = :correo LIMIT 1");
-        $stmt->bindValue(':correo', $correo);
+        $stmt = $db->prepare("SELECT id, usuario_id, matricula, nombre, apellido_paterno, apellido_materno, telefono, correo, photo_path, activo FROM alumnos WHERE usuario_id = :usuario_id LIMIT 1");
+        $stmt->bindValue(':usuario_id', (int)$user['id'], PDO::PARAM_INT);
         $stmt->execute();
-        $payloadUser['alumno'] = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        $alumno = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$alumno) {
+            $stmt = $db->prepare("SELECT id, usuario_id, matricula, nombre, apellido_paterno, apellido_materno, telefono, correo, photo_path, activo FROM alumnos WHERE correo = :correo ORDER BY id DESC LIMIT 1");
+            $stmt->bindValue(':correo', $correo);
+            $stmt->execute();
+            $alumno = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+
+        $payloadUser['alumno'] = $alumno;
     }
 
     echo json_encode([
@@ -83,6 +178,368 @@ if ($action === 'login') {
         'user' => $payloadUser,
     ]);
     exit;
+}
+
+if ($action === 'updateProfilePhoto') {
+    $userId = (int)($body['user_id'] ?? 0);
+    $requestedRole = strtoupper(trim((string)($body['rol'] ?? '')));
+
+    apiLog('Solicitud de actualización de foto de perfil', [
+        'user_id' => $userId,
+        'rol' => $requestedRole,
+        'has_file' => isset($_FILES['photo']),
+    ]);
+
+    if ($userId <= 0) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Usuario no válido.'
+        ]);
+        exit;
+    }
+
+    if (!isset($_FILES['photo']) || !is_array($_FILES['photo'])) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se recibió una imagen válida.'
+        ]);
+        exit;
+    }
+
+    $usuarioModel = new Usuario($db);
+    $user = $usuarioModel->findById($userId);
+    if (!$user) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se encontró la cuenta.'
+        ]);
+        exit;
+    }
+
+    $userRole = strtoupper((string)($user['rol'] ?? $requestedRole));
+    if (!in_array($userRole, ['ALUMNO', 'MAESTRO'], true)) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Solo alumno y maestro pueden actualizar foto de perfil.'
+        ]);
+        exit;
+    }
+
+    if (!empty($_FILES['photo']['error']) && (int)$_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se pudo recibir la imagen.'
+        ]);
+        exit;
+    }
+
+    $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+    $originalName = (string)($_FILES['photo']['name'] ?? '');
+    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    if (!in_array($extension, $allowedExtensions, true)) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Formato no permitido. Usa JPG, PNG o WEBP.'
+        ]);
+        exit;
+    }
+
+    $uploadDir = __DIR__ . '/uploads/profile_photos';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0775, true);
+    }
+
+    $safeFileName = 'profile_' . strtolower($userRole) . '_' . $userId . '_' . time() . '.' . $extension;
+    $destination = $uploadDir . '/' . $safeFileName;
+    if (!move_uploaded_file($_FILES['photo']['tmp_name'], $destination)) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se pudo guardar la imagen.'
+        ]);
+        exit;
+    }
+
+    $photoPath = 'uploads/profile_photos/' . $safeFileName;
+    $db->beginTransaction();
+    try {
+        if ($userRole === 'ALUMNO') {
+            $stmt = $db->prepare("UPDATE alumnos SET photo_path = :photo_path WHERE usuario_id = :user_id");
+            $stmt->bindValue(':photo_path', $photoPath);
+            $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+            $stmt->execute();
+
+            $stmt = $db->prepare("SELECT id, usuario_id, matricula, nombre, apellido_paterno, apellido_materno, telefono, correo, photo_path, activo FROM alumnos WHERE usuario_id = :user_id LIMIT 1");
+            $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+            $stmt->execute();
+            $profile = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        } else {
+            $stmt = $db->prepare("UPDATE maestros SET photo_path = :photo_path WHERE usuario_id = :user_id");
+            $stmt->bindValue(':photo_path', $photoPath);
+            $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+            $stmt->execute();
+
+            $stmt = $db->prepare("SELECT id, usuario_id, nombre, apellido_paterno, apellido_materno, telefono, correo, photo_path, activo FROM maestros WHERE usuario_id = :user_id LIMIT 1");
+            $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+            $stmt->execute();
+            $profile = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+
+        $db->commit();
+
+        apiLog('Foto de perfil actualizada', [
+            'user_id' => $userId,
+            'rol' => $userRole,
+            'photo_path' => $photoPath,
+        ]);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Foto de perfil actualizada correctamente.',
+            'photo_path' => $photoPath,
+            'profile' => $profile,
+        ]);
+        exit;
+    } catch (Exception $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+
+        apiLog('Error al actualizar foto de perfil', [
+            'user_id' => $userId,
+            'error' => $e->getMessage(),
+        ]);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se pudo actualizar la foto de perfil.'
+        ]);
+        exit;
+    }
+}
+
+if ($action === 'verifyRegistrationCode') {
+    $correo = trim((string)($body['correo'] ?? ''));
+    $userId = (int)($body['user_id'] ?? 0);
+    $code = preg_replace('/\D+/', '', (string)($body['code'] ?? ''));
+
+    apiLog('Solicitud de verificación recibida', [
+        'correo' => $correo,
+        'user_id' => $userId,
+        'code_len' => strlen($code),
+    ]);
+
+    if (($correo === '' && $userId <= 0) || strlen($code) !== 6) {
+        apiLog('Verificación rechazada por datos incompletos', [
+            'correo' => $correo,
+            'user_id' => $userId,
+        ]);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Correo y código de 6 dígitos son obligatorios.'
+        ]);
+        exit;
+    }
+
+    $usuarioModel = new Usuario($db);
+    $user = $userId > 0 ? $usuarioModel->findById($userId) : $usuarioModel->findByCorreo($correo);
+
+    if (!$user) {
+        apiLog('Verificación: cuenta no encontrada', ['correo' => $correo, 'user_id' => $userId]);
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se encontró la cuenta.'
+        ]);
+        exit;
+    }
+
+    if ((int)($user['activo'] ?? 0) === 1 && empty($user['verification_code_hash'])) {
+        apiLog('Verificación solicitada pero la cuenta ya estaba activa', ['correo' => $correo, 'user_id' => $userId]);
+        echo json_encode([
+            'success' => true,
+            'message' => 'La cuenta ya está verificada.'
+        ]);
+        exit;
+    }
+
+    $expiresAt = (string)($user['verification_expires_at'] ?? '');
+    if ($expiresAt !== '' && strtotime($expiresAt) !== false && strtotime($expiresAt) < time()) {
+        apiLog('Verificación expirada', [
+            'correo' => $correo,
+            'expira' => $expiresAt,
+        ]);
+        echo json_encode([
+            'success' => false,
+            'message' => 'El código expiró. Solicita uno nuevo.'
+        ]);
+        exit;
+    }
+
+    $incomingHash = hash('sha256', $code);
+    if (!hash_equals((string)($user['verification_code_hash'] ?? ''), $incomingHash)) {
+        apiLog('Código de verificación inválido', ['correo' => $correo]);
+        echo json_encode([
+            'success' => false,
+            'message' => 'El código no es válido.'
+        ]);
+        exit;
+    }
+
+    $db->beginTransaction();
+    try {
+        $usuarioModel->markEmailVerified((int)$user['id']);
+
+        if (strtoupper((string)($user['rol'] ?? '')) === 'ALUMNO') {
+            $stmt = $db->prepare("UPDATE alumnos SET activo = 1 WHERE usuario_id = :usuario_id");
+            $stmt->bindValue(':usuario_id', (int)$user['id'], PDO::PARAM_INT);
+            $stmt->execute();
+        }
+
+        $db->commit();
+
+        apiLog('Cuenta verificada correctamente', [
+            'correo' => $correo,
+            'usuario_id' => (int)$user['id'],
+        ]);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Cuenta verificada correctamente.'
+        ]);
+        exit;
+    } catch (Exception $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+
+        apiLog('Error al verificar cuenta', [
+            'correo' => $correo,
+            'error' => $e->getMessage(),
+        ]);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se pudo verificar la cuenta.'
+        ]);
+        exit;
+    }
+}
+
+if ($action === 'resendVerificationCode') {
+    $correo = trim((string)($body['correo'] ?? ''));
+    $userId = (int)($body['user_id'] ?? 0);
+
+    apiLog('Solicitud de reenvío recibida', [
+        'correo' => $correo,
+        'user_id' => $userId,
+    ]);
+
+    if ($correo === '' && $userId <= 0) {
+        apiLog('Reenvío rechazado por correo vacío');
+        echo json_encode([
+            'success' => false,
+            'message' => 'Correo obligatorio.'
+        ]);
+        exit;
+    }
+
+    $usuarioModel = new Usuario($db);
+    $user = $userId > 0 ? $usuarioModel->findById($userId) : $usuarioModel->findByCorreo($correo);
+
+    if (!$user) {
+        apiLog('Reenvío: cuenta no encontrada', ['correo' => $correo, 'user_id' => $userId]);
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se encontró la cuenta.'
+        ]);
+        exit;
+    }
+
+    if ((int)($user['activo'] ?? 0) === 1 && empty($user['verification_code_hash'])) {
+        apiLog('Reenvío solicitado para cuenta ya verificada', ['correo' => $correo, 'user_id' => $userId]);
+        echo json_encode([
+            'success' => true,
+            'message' => 'La cuenta ya está verificada.'
+        ]);
+        exit;
+    }
+
+    $verificationCode = generateVerificationCode();
+    $verificationHash = hash('sha256', $verificationCode);
+    $expiresAt = date('Y-m-d H:i:s', time() + (15 * 60));
+
+    $db->beginTransaction();
+    try {
+        $usuarioModel->setVerificationCode((int)$user['id'], $verificationHash, $expiresAt);
+        $db->commit();
+
+        apiLog('Nuevo código generado para reenvío', [
+            'correo' => $correo,
+            'usuario_id' => (int)$user['id'],
+            'expira' => $expiresAt,
+        ]);
+
+        $recipientEmails = [];
+        if (!empty($user['correo'])) {
+            $recipientEmails[] = (string)$user['correo'];
+        }
+
+        if (strtoupper((string)($user['rol'] ?? '')) === 'ALUMNO') {
+            $stmt = $db->prepare("SELECT tutor_correo, nombre FROM alumnos WHERE usuario_id = :usuario_id LIMIT 1");
+            $stmt->bindValue(':usuario_id', (int)$user['id'], PDO::PARAM_INT);
+            $stmt->execute();
+            $alumno = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            if (!$alumno) {
+                $stmt = $db->prepare("SELECT tutor_correo, nombre FROM alumnos WHERE correo = :correo ORDER BY id DESC LIMIT 1");
+                $stmt->bindValue(':correo', $correo);
+                $stmt->execute();
+                $alumno = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            }
+            if (!empty($alumno['tutor_correo'])) {
+                $recipientEmails[] = (string)$alumno['tutor_correo'];
+            }
+            $displayName = (string)($alumno['nombre'] ?? $user['nombre'] ?? 'usuario');
+        } else {
+            $displayName = (string)($user['nombre'] ?? 'usuario');
+        }
+
+        $recipientEmails = array_values(array_unique(array_filter($recipientEmails)));
+        $sentCount = 0;
+        foreach ($recipientEmails as $recipientEmail) {
+            if (sendVerificationCodeEmail($recipientEmail, $displayName, $verificationCode)) {
+                $sentCount++;
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => $sentCount > 0
+                ? 'Código reenviado correctamente.'
+                : 'Código generado. No se pudo enviar el correo, intenta reenviarlo de nuevo.',
+            'mail_sent' => $sentCount > 0,
+        ]);
+        apiLog('Reenvío finalizado', [
+            'correo' => $correo,
+            'user_id' => $userId,
+            'mail_sent' => $sentCount > 0,
+            'destinatarios' => $recipientEmails,
+        ]);
+        exit;
+    } catch (Exception $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+
+        apiLog('Error al reenviar código', [
+            'correo' => $correo,
+            'error' => $e->getMessage(),
+        ]);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se pudo reenviar el código.'
+        ]);
+        exit;
+    }
 }
 
 if ($action === 'teacherDashboard') {
@@ -120,6 +577,31 @@ if ($action === 'teacherDashboard') {
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode(['success' => true, 'message' => 'OK', 'data' => $items]);
+    exit;
+}
+
+if ($action === 'schoolCalendarStatus') {
+    $date = trim((string)($body['date'] ?? ''));
+    if ($date === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Fecha no válida.'
+        ]);
+        exit;
+    }
+
+    $blockReason = schoolCalendarBlockReason($db, $date);
+    $isSchoolDay = $blockReason === null;
+
+    echo json_encode([
+        'success' => true,
+        'message' => $isSchoolDay ? 'Día hábil.' : 'Día inhábil.',
+        'data' => [
+            'date' => $date,
+            'is_school_day' => $isSchoolDay,
+            'block_reason' => $blockReason,
+        ],
+    ]);
     exit;
 }
 
@@ -673,7 +1155,8 @@ if ($action === 'studentSubjectSchedule') {
                 m.clave AS materia_clave, m.nombre AS materia_nombre,
                 ma.nombre AS maestro_nombre, ma.apellido_paterno, ma.apellido_materno,
                 sc.id AS sesion_id,
-                sc.estatus AS sesion_estatus
+                sc.estatus AS sesion_estatus,
+                ca.nombre AS estado_actual
          FROM alumnos_grupos ag
          INNER JOIN grupo_materias gm ON ag.grupo_id = gm.grupo_id
          INNER JOIN materias m ON gm.materia_id = m.id
@@ -681,6 +1164,8 @@ if ($action === 'studentSubjectSchedule') {
          LEFT JOIN horarios h ON h.grupo_materia_maestro_id = gmm.id AND h.activo = 1
          LEFT JOIN maestros ma ON gmm.maestro_id = ma.id
          LEFT JOIN sesiones_clase sc ON sc.grupo_materia_maestro_id = gmm.id AND sc.fecha = CURDATE()
+         LEFT JOIN asistencias a ON a.sesion_clase_id = sc.id AND a.alumno_id = ag.alumno_id
+         LEFT JOIN catalogo_asistencia ca ON ca.id = a.estado_id
          INNER JOIN grupos g ON ag.grupo_id = g.id
          WHERE ag.alumno_id = :alumno_id
            AND ag.grupo_id = :grupo_id
@@ -726,19 +1211,10 @@ if ($action === 'studentSubjectSchedule') {
     }
 
     if ($todaySchedule) {
-        $stmt = $db->prepare(
-            "SELECT a.id
-             FROM sesiones_clase sc
-             INNER JOIN asistencias a ON a.sesion_clase_id = sc.id
-             WHERE sc.grupo_materia_maestro_id = :gmm_id
-               AND sc.fecha = CURDATE()
-               AND a.alumno_id = :alumno_id
-             LIMIT 1"
-        );
-        $stmt->bindValue(':gmm_id', (int)($todaySchedule['grupo_materia_maestro_id'] ?? 0), PDO::PARAM_INT);
-        $stmt->bindValue(':alumno_id', $alumnoId, PDO::PARAM_INT);
-        $stmt->execute();
-        $todaySchedule['asistencia_registrada'] = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+        $estadoActual = strtoupper((string)($todaySchedule['estado_actual'] ?? ''));
+        $todaySchedule['asistencia_registrada'] = in_array($estadoActual, ['ASISTENCIA', 'ASISTIÓ', 'ASISTENTE'], true);
+        $todaySchedule['falta_registrada'] = $estadoActual === 'FALTA';
+        $todaySchedule['estado_actual'] = $estadoActual !== '' ? $estadoActual : null;
         unset($todaySchedule['_key']);
         echo json_encode(['success' => true, 'message' => 'OK', 'data' => $todaySchedule]);
         exit;
@@ -1207,6 +1683,13 @@ if ($action === 'register' || $action === 'registerAlumno') {
     $password = (string)($body['password'] ?? '');
     $rol = strtoupper(trim((string)($body['rol'] ?? 'ALUMNO')));
 
+    apiLog('Inicio de registro', [
+        'action' => $action,
+        'rol' => $rol,
+        'correo' => $correo,
+        'tutor_correo' => trim((string)($body['tutor_correo'] ?? '')),
+    ]);
+
     if ($nombre === '' || $correo === '' || $password === '') {
         echo json_encode([
             'success' => false,
@@ -1221,12 +1704,15 @@ if ($action === 'register' || $action === 'registerAlumno') {
         $usuarioModel = new Usuario($db);
         $maestroModel = new Maestro($db);
         $alumnoModel = new Alumno($db);
+        $needsVerification = ($rol === 'ALUMNO');
 
         $userData = $usuarioModel->register([
             'nombre' => $nombre,
             'correo' => $correo,
             'password' => $password,
             'rol' => $rol,
+            'activo' => $needsVerification ? 0 : 1,
+            'estado_cuenta' => $needsVerification ? 'PENDIENTE' : 'ACTIVO',
         ]);
 
         if ($rol === 'MAESTRO') {
@@ -1239,21 +1725,67 @@ if ($action === 'register' || $action === 'registerAlumno') {
             ]);
         } elseif ($rol === 'ALUMNO') {
             $alumnoModel->create([
+                'usuario_id' => (int)$userData['id'],
                 'matricula' => $body['matricula'] ?? '',
                 'nombre' => $nombre,
                 'apellido_paterno' => $body['apellido_paterno'] ?? '',
                 'apellido_materno' => $body['apellido_materno'] ?? '',
                 'telefono' => $body['telefono'] ?? '',
                 'correo' => $correo,
+                'tutor_nombre' => $body['tutor_nombre'] ?? '',
+                'tutor_apellido_paterno' => $body['tutor_apellido_paterno'] ?? '',
+                'tutor_apellido_materno' => $body['tutor_apellido_materno'] ?? '',
+                'tutor_telefono' => $body['tutor_telefono'] ?? '',
+                'tutor_correo' => $body['tutor_correo'] ?? '',
+                'activo' => 0,
+            ]);
+
+            $verificationCode = generateVerificationCode();
+            $verificationHash = hash('sha256', $verificationCode);
+            $expiresAt = date('Y-m-d H:i:s', time() + (15 * 60));
+            $usuarioModel->setVerificationCode((int)$userData['id'], $verificationHash, $expiresAt);
+
+            apiLog('Alumno creado como pendiente', [
+                'usuario_id' => (int)$userData['id'],
+                'correo' => $correo,
+                'expira' => $expiresAt,
             ]);
         }
 
         $db->commit();
 
+        $verificationSent = false;
+        if ($rol === 'ALUMNO') {
+            $recipientEmails = array_values(array_unique(array_filter([
+                $correo,
+                trim((string)($body['tutor_correo'] ?? '')),
+            ])));
+            apiLog('Envío de verificación preparado', [
+                'usuario_id' => (int)$userData['id'],
+                'destinatarios' => $recipientEmails,
+            ]);
+            foreach ($recipientEmails as $recipientEmail) {
+                if (sendVerificationCodeEmail($recipientEmail, $nombre, $verificationCode)) {
+                    $verificationSent = true;
+                }
+            }
+        }
+
         echo json_encode([
             'success' => true,
-            'message' => 'Registro correcto.',
+            'message' => $rol === 'ALUMNO'
+                ? ($verificationSent
+                    ? 'Registro correcto. Te enviamos un código de verificación.'
+                    : 'Registro correcto. No se pudo enviar el correo, puedes reenviar el código.')
+                : 'Registro correcto.',
             'user' => $userData,
+            'verification_required' => $rol === 'ALUMNO',
+            'verification_sent' => $verificationSent,
+        ]);
+        apiLog('Registro finalizado', [
+            'usuario_id' => (int)$userData['id'],
+            'rol' => $rol,
+            'verification_sent' => $verificationSent,
         ]);
         exit;
     } catch (Exception $e) {
@@ -1261,9 +1793,90 @@ if ($action === 'register' || $action === 'registerAlumno') {
             $db->rollBack();
         }
 
+        apiLog('Error en registro', [
+            'action' => $action,
+            'correo' => $correo,
+            'error' => $e->getMessage(),
+        ]);
+
         echo json_encode([
             'success' => false,
             'message' => $e->getMessage(),
+        ]);
+        exit;
+    }
+}
+
+if ($action === 'deleteAccount' || $action === 'deactivateAccount') {
+    $userId = (int)($body['user_id'] ?? 0);
+    $correo = trim((string)($body['correo'] ?? ''));
+    $rol = strtoupper(trim((string)($body['rol'] ?? '')));
+
+    apiLog('Solicitud de eliminación de cuenta', [
+        'user_id' => $userId,
+        'correo' => $correo,
+        'rol' => $rol,
+    ]);
+
+    if ($userId <= 0) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Usuario no válido.'
+        ]);
+        exit;
+    }
+
+    $usuarioModel = new Usuario($db);
+    $user = $usuarioModel->findById($userId);
+    if (!$user) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se encontró la cuenta.'
+        ]);
+        exit;
+    }
+
+    $db->beginTransaction();
+    try {
+        $usuarioModel->deactivateAccount($userId);
+
+        $userRole = strtoupper((string)($user['rol'] ?? $rol));
+        if ($userRole === 'ALUMNO') {
+            $stmt = $db->prepare("UPDATE alumnos SET activo = 0 WHERE usuario_id = :user_id");
+            $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+            $stmt->execute();
+        } elseif ($userRole === 'MAESTRO') {
+            $stmt = $db->prepare("UPDATE maestros SET activo = 0 WHERE usuario_id = :user_id");
+            $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+            $stmt->execute();
+        }
+
+        $db->commit();
+
+        apiLog('Cuenta desactivada correctamente', [
+            'user_id' => $userId,
+            'correo' => $user['correo'] ?? $correo,
+            'rol' => $userRole,
+        ]);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Cuenta eliminada correctamente.'
+        ]);
+        exit;
+    } catch (Exception $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+
+        apiLog('Error al desactivar cuenta', [
+            'user_id' => $userId,
+            'error' => $e->getMessage(),
+        ]);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se pudo eliminar la cuenta.'
         ]);
         exit;
     }

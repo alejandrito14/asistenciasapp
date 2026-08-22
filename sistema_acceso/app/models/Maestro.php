@@ -32,5 +32,25 @@ class Maestro {
 
         return (int)$this->conn->lastInsertId();
     }
+
+    public function findByUsuarioId(int $usuarioId): ?array {
+        $query = "SELECT * FROM " . $this->table . " WHERE usuario_id = :usuario_id LIMIT 1";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindValue(':usuario_id', $usuarioId, PDO::PARAM_INT);
+        $stmt->execute();
+
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    public function updatePhotoPathByUsuarioId(int $usuarioId, string $photoPath): bool {
+        $query = "UPDATE " . $this->table . "
+                  SET photo_path = :photo_path
+                  WHERE usuario_id = :usuario_id";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindValue(':photo_path', $photoPath);
+        $stmt->bindValue(':usuario_id', $usuarioId, PDO::PARAM_INT);
+        return $stmt->execute();
+    }
 }
 ?>

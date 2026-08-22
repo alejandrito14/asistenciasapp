@@ -23,15 +23,24 @@ SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `alumnos`;
 CREATE TABLE `alumnos` (
   `id` int NOT NULL AUTO_INCREMENT,
+  `usuario_id` int DEFAULT NULL,
   `matricula` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `nombre` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
   `apellido_paterno` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `apellido_materno` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `telefono` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `correo` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `photo_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `tutor_nombre` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `tutor_apellido_paterno` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `tutor_apellido_materno` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `tutor_telefono` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `tutor_correo` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `activo` tinyint(1) DEFAULT '1',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `matricula` (`matricula`)
+  UNIQUE KEY `matricula` (`matricula`),
+  KEY `usuario_id` (`usuario_id`),
+  CONSTRAINT `alumnos_ibfk_1` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ----------------------------
@@ -219,6 +228,7 @@ CREATE TABLE `maestros` (
   `apellido_materno` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `telefono` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `correo` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `photo_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `activo` tinyint(1) DEFAULT '1',
   PRIMARY KEY (`id`),
   KEY `usuario_id` (`usuario_id`),
@@ -295,9 +305,13 @@ CREATE TABLE `usuarios` (
   `password` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
   `rol` enum('ADMIN','MAESTRO','ALUMNO') COLLATE utf8mb4_general_ci NOT NULL,
   `activo` tinyint(1) DEFAULT '1',
+  `estado_cuenta` enum('PENDIENTE','ACTIVO','ELIMINADO') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'ACTIVO',
+  `verification_code_hash` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `verification_expires_at` datetime DEFAULT NULL,
+  `email_verified_at` datetime DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `correo` (`correo`)
+  KEY `correo` (`correo`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ----------------------------

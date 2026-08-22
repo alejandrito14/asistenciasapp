@@ -14,6 +14,17 @@ if (!$db) {
 
 $now = new DateTime('now');
 $today = $now->format('Y-m-d');
+$todayDay = strtoupper($now->format('l'));
+$daysMap = [
+    'MONDAY' => 'LUNES',
+    'TUESDAY' => 'MARTES',
+    'WEDNESDAY' => 'MIERCOLES',
+    'THURSDAY' => 'JUEVES',
+    'FRIDAY' => 'VIERNES',
+    'SATURDAY' => 'SABADO',
+    'SUNDAY' => 'DOMINGO',
+];
+$todayDay = $daysMap[$todayDay] ?? '';
 
 if (!isSchoolDay($db, $today)) {
     $reason = schoolCalendarBlockReason($db, $today);
@@ -29,13 +40,14 @@ $stmt = $db->prepare(
             sc.fecha,
             sc.estatus,
             gmm.id AS grupo_materia_maestro_id,
+            h.dia_semana,
             h.hora_fin,
             COALESCE(h.minutos_despues, 15) AS minutos_despues
      FROM sesiones_clase sc
      INNER JOIN grupo_materia_maestro gmm ON gmm.id = sc.grupo_materia_maestro_id
      INNER JOIN horarios h ON h.grupo_materia_maestro_id = gmm.id AND h.activo = 1
      WHERE sc.estatus = 'ABIERTA'
-       AND sc.fecha <= CURDATE()"
+       AND sc.fecha = CURDATE()"
 );
 $stmt->execute();
 $sessions = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -44,8 +56,9 @@ $closed = 0;
 
 foreach ($sessions as $session) {
     $sessionDate = (string)($session['fecha'] ?? $today);
+    $sessionDay = strtoupper((string)($session['dia_semana'] ?? ''));
     $endTime = (string)($session['hora_fin'] ?? '');
-    if ($endTime === '') {
+    if ($endTime === '' || $sessionDay === '' || $sessionDay !== $todayDay) {
         continue;
     }
 

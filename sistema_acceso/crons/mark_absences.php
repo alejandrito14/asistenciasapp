@@ -15,6 +15,16 @@ if (!$db) {
 $now = new DateTime('now');
 $today = $now->format('Y-m-d');
 $currentTime = $now->format('H:i:s');
+$daysMap = [
+    'MONDAY' => 'LUNES',
+    'TUESDAY' => 'MARTES',
+    'WEDNESDAY' => 'MIERCOLES',
+    'THURSDAY' => 'JUEVES',
+    'FRIDAY' => 'VIERNES',
+    'SATURDAY' => 'SABADO',
+    'SUNDAY' => 'DOMINGO',
+];
+$todayDay = $daysMap[strtoupper($now->format('l'))] ?? '';
 
 if (!isSchoolDay($db, $today)) {
     $reason = schoolCalendarBlockReason($db, $today);
@@ -51,7 +61,7 @@ $stmt = $db->prepare(
      INNER JOIN grupo_materia_maestro gmm ON gmm.id = sc.grupo_materia_maestro_id
      INNER JOIN grupo_materias gm ON gm.id = gmm.grupo_materia_id
      INNER JOIN horarios h ON h.grupo_materia_maestro_id = gmm.id AND h.activo = 1
-     WHERE sc.fecha <= CURDATE()
+     WHERE sc.fecha = CURDATE()
        AND sc.estatus = 'CERRADA'"
 );
 $stmt->execute();
@@ -61,8 +71,7 @@ $inserted = 0;
 
 foreach ($sessions as $session) {
     $dayName = strtoupper((string)($session['dia_semana'] ?? ''));
-    $dayIndex = $daysMap[$dayName] ?? 0;
-    if ($dayIndex === 0) {
+    if ($dayName === '' || $dayName !== $todayDay) {
         continue;
     }
 

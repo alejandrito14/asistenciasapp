@@ -26,7 +26,11 @@
                 <input type="hidden" name="a" value="attendances">
                 <div class="card-body">
                     <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <label class="form-label fw-semibold">Fecha</label>
+                            <input type="date" name="fecha" class="form-control" value="<?php echo htmlspecialchars($attendanceFilters['fecha'] ?? ''); ?>">
+                        </div>
+                        <div class="col-md-2">
                             <label class="form-label fw-semibold">Grupo</label>
                             <select name="grupo_id" class="form-select">
                                 <option value="">Todos</option>
@@ -48,7 +52,7 @@
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label fw-semibold">Alumno</label>
                             <input
                                 type="text"
@@ -75,6 +79,7 @@
 
             <div class="d-flex justify-content-end mb-3">
                 <form action="?c=Dashboard&a=exportAttendances" method="POST" class="m-0">
+                    <input type="hidden" name="fecha" value="<?php echo htmlspecialchars($attendanceFilters['fecha'] ?? ''); ?>">
                     <input type="hidden" name="grupo_id" value="<?php echo htmlspecialchars($attendanceFilters['grupo_id'] ?? ''); ?>">
                     <input type="hidden" name="materia_id" value="<?php echo htmlspecialchars($attendanceFilters['materia_id'] ?? ''); ?>">
                     <input type="hidden" name="alumno_id" value="<?php echo htmlspecialchars($attendanceFilters['alumno_id'] ?? ''); ?>">

@@ -1,0 +1,12 @@
+<?php
+
+return [
+    'host' => 'smtp.tudominio.com',
+    'port' => 587,
+    'username' => 'usuario_smtp',
+    'password' => 'tu_clave_smtp',
+    'encryption' => 'tls',
+    'from_email' => 'no-reply@tudominio.com',
+    'from_name' => 'Control de Asistencias',
+];
+

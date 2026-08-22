@@ -15,6 +15,16 @@ if (!$db) {
 $now = new DateTime('now');
 $today = $now->format('Y-m-d');
 $currentTime = $now->format('H:i:s');
+$daysMap = [
+    1 => 'LUNES',
+    2 => 'MARTES',
+    3 => 'MIERCOLES',
+    4 => 'JUEVES',
+    5 => 'VIERNES',
+    6 => 'SABADO',
+    7 => 'DOMINGO',
+];
+$todayDay = $daysMap[(int)$now->format('N')] ?? '';
 
 if (!isSchoolDay($db, $today)) {
     $reason = schoolCalendarBlockReason($db, $today);
@@ -27,6 +37,7 @@ if (!isSchoolDay($db, $today)) {
 
 $stmt = $db->prepare(
     "SELECT gmm.id AS grupo_materia_maestro_id,
+            h.dia_semana,
             h.hora_inicio,
             COALESCE(h.minutos_antes, 15) AS minutos_antes
      FROM grupo_materia_maestro gmm
@@ -45,8 +56,13 @@ $opened = 0;
 
 foreach ($schedules as $schedule) {
     $gmmId = (int)($schedule['grupo_materia_maestro_id'] ?? 0);
+    $scheduleDay = strtoupper((string)($schedule['dia_semana'] ?? ''));
     $startTime = (string)($schedule['hora_inicio'] ?? '');
-    if ($gmmId <= 0 || $startTime === '') {
+    if ($gmmId <= 0 || $startTime === '' || $scheduleDay === '') {
+        continue;
+    }
+
+    if ($scheduleDay !== $todayDay) {
         continue;
     }
 
