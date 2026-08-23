@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/device_token_service.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_text_field.dart';
 import '../models/auth_user.dart';
@@ -40,6 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = result.data;
       if (user is AuthUser) {
         await AuthService.saveSession(user);
+        await DeviceTokenService.syncForUser(user);
         if (user.rol.toUpperCase() == 'MAESTRO') {
           Navigator.of(context).pushReplacementNamed('/teacher', arguments: user);
         } else if (user.rol.toUpperCase() == 'ALUMNO') {

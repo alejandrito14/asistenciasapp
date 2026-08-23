@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/device_token_service.dart';
 import 'student_dashboard_screen.dart';
 
 class VerifyAccountScreen extends StatefulWidget {
@@ -83,6 +84,7 @@ class _VerifyAccountScreenState extends State<VerifyAccountScreen> {
 
     final user = loginResult.data!;
     await AuthService.saveSession(user);
+    await DeviceTokenService.syncForUser(user);
 
     if (!mounted) return;
 

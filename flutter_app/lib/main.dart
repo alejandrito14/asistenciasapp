@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -8,7 +9,13 @@ import 'screens/student_dashboard_screen.dart';
 import 'screens/teacher_dashboard_screen.dart';
 import 'screens/register_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    // Si Firebase no termina de configurarse, la app aún puede abrir.
+  }
   runApp(const AppAsistenciasApp());
 }
 

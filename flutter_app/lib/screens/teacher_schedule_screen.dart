@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/dashboard_service.dart';
+import 'teacher_tasks_screen.dart';
 
 class TeacherScheduleScreen extends StatefulWidget {
   final List<dynamic> scheduleItems;
@@ -278,6 +279,23 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
               const SizedBox(height: 16),
               SizedBox(
                 height: 50,
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Future.microtask(() => _openTasks(item));
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFEF6C00),
+                    side: const BorderSide(color: Color(0xFFF8D7BF)),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: const Text('Ver tareas'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 50,
                 child: FilledButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('Cerrar'),
@@ -287,6 +305,26 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _openTasks(Map<String, dynamic> item) async {
+    final gmmId = (item['id'] as num?)?.toInt() ?? 0;
+    if (gmmId <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo identificar la clase.')),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TeacherTasksScreen(
+          classInfo: Map<String, dynamic>.from(item),
+          grupoMateriaMaestroId: gmmId,
+        ),
+      ),
     );
   }
 

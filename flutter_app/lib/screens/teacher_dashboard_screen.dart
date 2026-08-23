@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../config/api_config.dart';
 import '../models/auth_user.dart';
 import '../services/auth_service.dart';
+import '../services/device_token_service.dart';
 import '../services/dashboard_service.dart';
 import 'manual_attendance_screen.dart';
 import 'login_screen.dart';
@@ -36,6 +37,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     super.initState();
     _profilePhotoPath = widget.user.maestro?['photo_path']?.toString();
     _load();
+    Future.microtask(() => DeviceTokenService.syncForUser(widget.user));
   }
 
   Future<void> _load() async {

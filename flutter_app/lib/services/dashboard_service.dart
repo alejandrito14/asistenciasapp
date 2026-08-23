@@ -106,6 +106,24 @@ class DashboardService {
     );
   }
 
+  static Future<ApiResponse<Map<String, dynamic>>> studentGroupTasks({
+    required int alumnoId,
+    required int grupoId,
+  }) async {
+    final response = await _post(
+      action: 'studentGroupTasks',
+      body: {'alumno_id': alumnoId, 'grupo_id': grupoId},
+    );
+    if (!response.success) {
+      return ApiResponse<Map<String, dynamic>>(success: false, message: response.message);
+    }
+    return ApiResponse<Map<String, dynamic>>(
+      success: true,
+      message: response.message,
+      data: (response.data as Map<String, dynamic>?) ?? <String, dynamic>{},
+    );
+  }
+
   static Future<ApiResponse<Map<String, dynamic>>> studentSubjectSchedule({
     required int alumnoId,
     required int grupoId,
@@ -185,6 +203,50 @@ class DashboardService {
       body: {
         'grupo_materia_maestro_id': grupoMateriaMaestroId,
         'attendance': attendance,
+      },
+    );
+    if (!response.success) {
+      return ApiResponse<Map<String, dynamic>>(success: false, message: response.message);
+    }
+    return ApiResponse<Map<String, dynamic>>(
+      success: true,
+      message: response.message,
+      data: (response.data as Map<String, dynamic>?) ?? <String, dynamic>{},
+    );
+  }
+
+  static Future<ApiResponse<Map<String, dynamic>>> teacherClassTasks({
+    required int grupoMateriaMaestroId,
+  }) async {
+    final response = await _post(
+      action: 'teacherClassTasks',
+      body: {'grupo_materia_maestro_id': grupoMateriaMaestroId},
+    );
+    if (!response.success) {
+      return ApiResponse<Map<String, dynamic>>(success: false, message: response.message);
+    }
+    return ApiResponse<Map<String, dynamic>>(
+      success: true,
+      message: response.message,
+      data: (response.data as Map<String, dynamic>?) ?? <String, dynamic>{},
+    );
+  }
+
+  static Future<ApiResponse<Map<String, dynamic>>> teacherCreateTask({
+    required int grupoMateriaMaestroId,
+    required String titulo,
+    required String descripcion,
+    required String fechaEntrega,
+    int? usuarioId,
+  }) async {
+    final response = await _post(
+      action: 'teacherCreateTask',
+      body: {
+        'grupo_materia_maestro_id': grupoMateriaMaestroId,
+        'titulo': titulo,
+        'descripcion': descripcion,
+        'fecha_entrega': fechaEntrega,
+        if (usuarioId != null) 'usuario_id': usuarioId,
       },
     );
     if (!response.success) {

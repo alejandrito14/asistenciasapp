@@ -213,6 +213,34 @@ class AuthService {
     );
   }
 
+  static Future<ApiResponse<Map<String, dynamic>>> registerDeviceToken({
+    required int userId,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _post(
+      action: 'registerDeviceToken',
+      body: {
+        'user_id': userId,
+        'device_id': deviceId,
+        'device_token': deviceToken,
+      },
+    );
+
+    if (!response.success) {
+      return ApiResponse<Map<String, dynamic>>(
+        success: false,
+        message: response.message,
+      );
+    }
+
+    return ApiResponse<Map<String, dynamic>>(
+      success: true,
+      message: response.message,
+      data: (response.data as Map<String, dynamic>?) ?? <String, dynamic>{},
+    );
+  }
+
   static Future<ApiResponse<Map<String, dynamic>>> updateProfilePhoto({
     required int userId,
     required String rol,

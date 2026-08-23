@@ -1,4 +1,4 @@
-package com.example.appasistencias
+package com.arpiacheck.app
 
 import io.flutter.embedding.android.FlutterActivity
 

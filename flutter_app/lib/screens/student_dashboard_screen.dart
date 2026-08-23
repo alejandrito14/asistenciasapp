@@ -6,11 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import '../config/api_config.dart';
 import '../models/auth_user.dart';
 import '../services/auth_service.dart';
+import '../services/device_token_service.dart';
 import '../services/dashboard_service.dart';
-import 'group_schedule_screen.dart';
 import 'justification_screen.dart';
 import 'login_screen.dart';
 import 'student_justifications_screen.dart';
+import 'group_schedule_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   final AuthUser user;
@@ -43,6 +44,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     _alumnoId = (widget.user.alumno?['id'] as num?)?.toInt() ?? 0;
     _profilePhotoPath = widget.user.alumno?['photo_path']?.toString();
     _load();
+    Future.microtask(() => DeviceTokenService.syncForUser(widget.user));
   }
 
   Future<void> _load() async {
@@ -81,19 +83,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final grupoId = _selectedGroupId ?? 0;
     if (grupoId <= 0 || _alumnoId == null) return;
 
-    final result = await DashboardService.studentGroupSchedule(
-      alumnoId: _alumnoId!,
-      grupoId: grupoId,
-    );
-    if (!mounted) return;
-
-    if (!result.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
-      return;
-    }
-
     String groupName = 'Grupo';
     for (final item in _myGroups) {
       if ((item['grupo_id'] as num?)?.toInt() == grupoId) {
@@ -105,8 +94,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => GroupScheduleScreen(
+          alumnoId: _alumnoId!,
+          grupoId: grupoId,
           groupName: groupName,
-          scheduleItems: result.data ?? <dynamic>[],
         ),
       ),
     );
