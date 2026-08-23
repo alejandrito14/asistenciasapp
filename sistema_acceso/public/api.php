@@ -180,6 +180,92 @@ if ($action === 'login') {
     exit;
 }
 
+if ($action === 'registerDeviceToken') {
+    $userId = (int)($body['user_id'] ?? 0);
+    $deviceId = trim((string)($body['device_id'] ?? ''));
+    $deviceToken = trim((string)($body['device_token'] ?? ''));
+
+    if ($userId <= 0 || $deviceId === '' || $deviceToken === '') {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Usuario, dispositivo y token son obligatorios.'
+        ]);
+        exit;
+    }
+
+    $usuarioModel = new Usuario($db);
+    $user = $usuarioModel->findById($userId);
+    if (!$user) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se encontró la cuenta.'
+        ]);
+        exit;
+    }
+
+    try {
+        $existingStmt = $db->prepare(
+            "SELECT id
+             FROM user_devices
+             WHERE device_token = :device_token
+                OR device_id = :device_id
+             ORDER BY updated_at DESC, id DESC
+             LIMIT 1"
+        );
+        $existingStmt->bindValue(':device_token', $deviceToken);
+        $existingStmt->bindValue(':device_id', $deviceId);
+        $existingStmt->execute();
+        $existing = $existingStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($existing) {
+            $stmt = $db->prepare(
+                "UPDATE user_devices
+                 SET user_id = :user_id,
+                     device_id = :device_id,
+                     device_token = :device_token,
+                     updated_at = NOW()
+                 WHERE id = :id"
+            );
+            $stmt->bindValue(':id', (int)$existing['id'], PDO::PARAM_INT);
+        } else {
+            $stmt = $db->prepare(
+                "INSERT INTO user_devices (user_id, device_id, device_token, created_at, updated_at)
+                 VALUES (:user_id, :device_id, :device_token, NOW(), NOW())"
+            );
+        }
+
+        $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+        $stmt->bindValue(':device_id', $deviceId);
+        $stmt->bindValue(':device_token', $deviceToken);
+        $stmt->execute();
+
+        apiLog('Token de dispositivo registrado', [
+            'user_id' => $userId,
+            'device_id' => $deviceId,
+            'device_token' => $deviceToken,
+            'mode' => $existing ? 'updated' : 'inserted',
+        ]);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Token registrado correctamente.'
+        ]);
+        exit;
+    } catch (Throwable $e) {
+        apiLog('Error al registrar token de dispositivo', [
+            'user_id' => $userId,
+            'device_id' => $deviceId,
+            'error' => $e->getMessage(),
+        ]);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se pudo registrar el token del dispositivo.'
+        ]);
+        exit;
+    }
+}
+
 if ($action === 'updateProfilePhoto') {
     $userId = (int)($body['user_id'] ?? 0);
     $requestedRole = strtoupper(trim((string)($body['rol'] ?? '')));
@@ -693,6 +779,136 @@ if ($action === 'teacherToggleSession') {
     exit;
 }
 
+if ($action === 'teacherClassTasks') {
+    $gmmId = (int)($body['grupo_materia_maestro_id'] ?? 0);
+    if ($gmmId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Clase no válida.']);
+        exit;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT gmm.id AS grupo_materia_maestro_id,
+                g.id AS grupo_id,
+                g.nombre AS grupo_nombre,
+                g.semestre,
+                g.turno,
+                g.ciclo_escolar,
+                m.id AS materia_id,
+                m.clave AS materia_clave,
+                m.nombre AS materia_nombre,
+                ma.nombre AS maestro_nombre,
+                ma.apellido_paterno,
+                ma.apellido_materno,
+                h.dia_semana,
+                h.hora_inicio,
+                h.hora_fin,
+                h.aula
+         FROM grupo_materia_maestro gmm
+         INNER JOIN grupo_materias gm ON gmm.grupo_materia_id = gm.id
+         INNER JOIN grupos g ON gm.grupo_id = g.id
+         INNER JOIN materias m ON gm.materia_id = m.id
+         LEFT JOIN maestros ma ON gmm.maestro_id = ma.id
+         LEFT JOIN horarios h ON h.grupo_materia_maestro_id = gmm.id AND h.activo = 1
+         WHERE gmm.id = :gmm_id
+         LIMIT 1"
+    );
+    $stmt->bindValue(':gmm_id', $gmmId, PDO::PARAM_INT);
+    $stmt->execute();
+    $classInfo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$classInfo) {
+        echo json_encode(['success' => false, 'message' => 'No se encontró la clase.']);
+        exit;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT id,
+                grupo_materia_maestro_id,
+                titulo,
+                descripcion,
+                fecha_entrega,
+                creado_por_usuario_id,
+                estatus,
+                created_at,
+                updated_at
+         FROM tareas
+         WHERE grupo_materia_maestro_id = :gmm_id
+           AND COALESCE(estatus, 'ACTIVA') <> 'ELIMINADA'
+         ORDER BY fecha_entrega ASC, id DESC"
+    );
+    $stmt->bindValue(':gmm_id', $gmmId, PDO::PARAM_INT);
+    $stmt->execute();
+    $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'OK',
+        'data' => [
+            'class' => $classInfo,
+            'tasks' => $tasks,
+        ],
+    ]);
+    exit;
+}
+
+if ($action === 'teacherCreateTask') {
+    $gmmId = (int)($body['grupo_materia_maestro_id'] ?? 0);
+    $titulo = trim((string)($body['titulo'] ?? ''));
+    $descripcion = trim((string)($body['descripcion'] ?? ''));
+    $fechaEntrega = trim((string)($body['fecha_entrega'] ?? ''));
+    $usuarioId = (int)($body['usuario_id'] ?? 0);
+
+    if ($gmmId <= 0 || $titulo === '' || $descripcion === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaEntrega)) {
+        echo json_encode(['success' => false, 'message' => 'Datos inválidos.']);
+        exit;
+    }
+
+    $stmt = $db->prepare("SELECT id FROM grupo_materia_maestro WHERE id = :gmm_id LIMIT 1");
+    $stmt->bindValue(':gmm_id', $gmmId, PDO::PARAM_INT);
+    $stmt->execute();
+    if (!$stmt->fetch(PDO::FETCH_ASSOC)) {
+        echo json_encode(['success' => false, 'message' => 'No se encontró la clase.']);
+        exit;
+    }
+
+    $stmt = $db->prepare(
+        "INSERT INTO tareas (
+            grupo_materia_maestro_id,
+            titulo,
+            descripcion,
+            fecha_entrega,
+            creado_por_usuario_id,
+            estatus,
+            created_at,
+            updated_at
+        ) VALUES (
+            :gmm_id,
+            :titulo,
+            :descripcion,
+            :fecha_entrega,
+            :usuario_id,
+            'ACTIVA',
+            NOW(),
+            NOW()
+        )"
+    );
+    $stmt->bindValue(':gmm_id', $gmmId, PDO::PARAM_INT);
+    $stmt->bindValue(':titulo', $titulo);
+    $stmt->bindValue(':descripcion', $descripcion);
+    $stmt->bindValue(':fecha_entrega', $fechaEntrega);
+    $stmt->bindValue(':usuario_id', $usuarioId > 0 ? $usuarioId : null, $usuarioId > 0 ? PDO::PARAM_INT : PDO::PARAM_NULL);
+    $stmt->execute();
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'Tarea creada correctamente.',
+        'data' => [
+            'task_id' => (int)$db->lastInsertId(),
+        ],
+    ]);
+    exit;
+}
+
 if ($action === 'teacherClassStudents') {
     $gmmId = (int)($body['grupo_materia_maestro_id'] ?? 0);
     if ($gmmId <= 0) {
@@ -1046,6 +1262,114 @@ if ($action === 'studentDashboard') {
     $inscriptions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode(['success' => true, 'message' => 'OK', 'data' => ['available_groups' => $groups, 'inscriptions' => $inscriptions]]);
+    exit;
+}
+
+if ($action === 'studentGroupTasks') {
+    $alumnoId = (int)($body['alumno_id'] ?? 0);
+    $grupoId = (int)($body['grupo_id'] ?? 0);
+    if ($alumnoId <= 0 || $grupoId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Datos inválidos.']);
+        exit;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT g.id, g.nombre, g.semestre, g.turno, g.ciclo_escolar
+         FROM alumnos_grupos ag
+         INNER JOIN grupos g ON ag.grupo_id = g.id
+         WHERE ag.alumno_id = :alumno_id
+           AND ag.grupo_id = :grupo_id
+           AND ag.fecha_baja IS NULL
+         LIMIT 1"
+    );
+    $stmt->bindValue(':alumno_id', $alumnoId, PDO::PARAM_INT);
+    $stmt->bindValue(':grupo_id', $grupoId, PDO::PARAM_INT);
+    $stmt->execute();
+    $group = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$group) {
+        echo json_encode(['success' => false, 'message' => 'No se encontró el grupo para este alumno.']);
+        exit;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT gmm.id AS grupo_materia_maestro_id,
+                g.id AS grupo_id,
+                g.nombre AS grupo_nombre,
+                g.semestre,
+                g.turno,
+                g.ciclo_escolar,
+                m.id AS materia_id,
+                m.clave AS materia_clave,
+                m.nombre AS materia_nombre,
+                ma.nombre AS maestro_nombre,
+                ma.apellido_paterno,
+                ma.apellido_materno,
+                h.dia_semana,
+                h.hora_inicio,
+                h.hora_fin,
+                h.aula
+         FROM grupo_materias gm
+         INNER JOIN grupo_materia_maestro gmm ON gmm.grupo_materia_id = gm.id AND gmm.activo = 1
+         INNER JOIN grupos g ON gm.grupo_id = g.id
+         INNER JOIN materias m ON gm.materia_id = m.id
+         LEFT JOIN maestros ma ON gmm.maestro_id = ma.id
+         LEFT JOIN horarios h ON h.grupo_materia_maestro_id = gmm.id AND h.activo = 1
+         WHERE g.id = :grupo_id
+         ORDER BY g.nombre ASC, m.nombre ASC, h.dia_semana ASC, h.hora_inicio ASC"
+    );
+    $stmt->bindValue(':grupo_id', $grupoId, PDO::PARAM_INT);
+    $stmt->execute();
+    $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $taskStmt = $db->prepare(
+        "SELECT id,
+                grupo_materia_maestro_id,
+                titulo,
+                descripcion,
+                fecha_entrega,
+                creado_por_usuario_id,
+                estatus,
+                created_at,
+                updated_at
+         FROM tareas
+         WHERE grupo_materia_maestro_id = :gmm_id
+           AND COALESCE(estatus, 'ACTIVA') <> 'ELIMINADA'
+         ORDER BY fecha_entrega ASC, id DESC"
+    );
+
+    $tasksByClass = [];
+    $classIds = [];
+    foreach ($items as $item) {
+        $classId = (int)($item['grupo_materia_maestro_id'] ?? 0);
+        if ($classId > 0) {
+            $classIds[$classId] = true;
+        }
+    }
+
+    foreach (array_keys($classIds) as $classId) {
+        $taskStmt->bindValue(':gmm_id', $classId, PDO::PARAM_INT);
+        $taskStmt->execute();
+        $tasksByClass[$classId] = $taskStmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    $responseItems = [];
+    foreach ($items as $item) {
+        $classId = (int)($item['grupo_materia_maestro_id'] ?? 0);
+        $tasks = $tasksByClass[$classId] ?? [];
+        $item['tasks'] = $tasks;
+        $item['tasks_count'] = count($tasks);
+        $responseItems[] = $item;
+    }
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'OK',
+        'data' => [
+            'group' => $group,
+            'items' => $responseItems,
+        ],
+    ]);
     exit;
 }
 
