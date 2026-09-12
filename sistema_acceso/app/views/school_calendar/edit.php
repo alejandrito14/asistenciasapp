@@ -57,6 +57,22 @@
                             <label class="form-label fw-bold">Descripción</label>
                             <input type="text" name="descripcion" class="form-control" maxlength="255" value="<?php echo htmlspecialchars($item['descripcion'] ?? ''); ?>">
                         </div>
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="para_maestro" id="para_maestro" <?php echo !empty($item['maestro_id']) ? 'checked' : ''; ?>>
+                                <label class="form-check-label fw-semibold" for="para_maestro">Este registro es para un maestro en particular</label>
+                            </div>
+                        </div>
+                        <div class="col-md-8" id="maestro_wrap" style="<?php echo !empty($item['maestro_id']) ? '' : 'display:none;'; ?>">
+                            <label class="form-label fw-bold">Maestro</label>
+                            <select name="maestro_id" id="maestro_id" class="form-select">
+                                <option value="">Selecciona un maestro</option>
+                                <?php foreach (($teachers ?? []) as $teacher): ?>
+                                    <?php $teacherName = trim(($teacher['nombre'] ?? '') . ' ' . ($teacher['apellido_paterno'] ?? '') . ' ' . ($teacher['apellido_materno'] ?? '')); ?>
+                                    <option value="<?php echo (int)$teacher['id']; ?>" <?php echo ((int)($item['maestro_id'] ?? 0) === (int)$teacher['id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars($teacherName); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                         <div class="col-md-4">
                             <label class="form-label fw-bold">Estado</label>
                             <select name="activo" class="form-select">
@@ -82,6 +98,9 @@
     const fechaInicio = document.getElementById('fecha_inicio');
     const fechaFin = document.getElementById('fecha_fin');
     const fechaFinWrap = document.getElementById('fecha_fin_wrap');
+    const paraMaestro = document.getElementById('para_maestro');
+    const maestroWrap = document.getElementById('maestro_wrap');
+    const maestroId = document.getElementById('maestro_id');
 
     function syncCalendarMode() {
         const isRange = modoRango.checked;
@@ -100,6 +119,12 @@
         }
     });
     syncCalendarMode();
+
+    paraMaestro.addEventListener('change', () => {
+        maestroWrap.style.display = paraMaestro.checked ? 'block' : 'none';
+        maestroId.required = paraMaestro.checked;
+        if (!paraMaestro.checked) maestroId.value = '';
+    });
 </script>
 </body>
 </html>

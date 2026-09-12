@@ -17,6 +17,12 @@ function renderMenu($c, $a) {
             </a>
         </li>
 
+        <li>
+            <a href="?c=StudentAccess" class="<?php echo ($c=='StudentAccess') ? 'active' : ''; ?>">
+                <i class="bi bi-people"></i> Listado de Alumnos
+            </a>
+        </li>
+
         <?php if(isset($_SESSION['role']) && $_SESSION['role'] == 'admin'): ?>
             <li class="text-muted small fw-bold px-3 mt-3 mb-1">ADMINISTRACIÓN</li>
             
@@ -87,7 +93,7 @@ function renderMenu($c, $a) {
         <li class="text-muted small fw-bold px-3 mt-3 mb-1">SEGURIDAD</li>
 
         <li>
-            <a href="#" data-bs-toggle="modal" data-bs-target="#sysPassModal" class="text-info">
+            <a href="#" class="text-info js-open-password-modal">
                 <i class="bi bi-key"></i> Cambiar mi Clave
             </a>
         </li>
@@ -98,38 +104,11 @@ function renderMenu($c, $a) {
             </a>
         </li>
     </ul>
-
-    <div class="modal fade text-dark" id="sysPassModal" tabindex="-1">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header bg-dark text-white">
-            <h5 class="modal-title"><i class="bi bi-shield-lock"></i> Cambiar Mi Contraseña</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-          </div>
-          <form action="?c=User&a=change_own_password" method="POST">
-              <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">Nueva Contraseña</label>
-                    <input type="password" name="new_password" class="form-control" required minlength="6">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Confirmar Contraseña</label>
-                    <input type="password" name="confirm_password" class="form-control" required minlength="6">
-                </div>
-              </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Actualizar</button>
-              </div>
-          </form>
-        </div>
-      </div>
-    </div>
 <?php
 }
 ?>
 
-<div class="sidebar d-none d-md-block" style="width: 260px; min-height: 100vh; background-color: #212529; color: white;">
+<div class="sidebar desktop-sidebar d-none d-xl-block">
     
     <div class="py-4 px-3 mb-4 bg-black bg-gradient d-flex align-items-center">
         <i class="bi bi-shield-lock-fill fs-3 me-2 text-warning"></i>
@@ -144,7 +123,7 @@ function renderMenu($c, $a) {
     <?php renderMenu($c, $a); ?>
 </div>
 
-<div class="d-md-none w-100">
+<div class="d-xl-none w-100">
     <nav class="navbar navbar-dark bg-dark mb-3 shadow p-3">
         <div class="container-fluid p-0">
             <button class="btn btn-outline-secondary border-0 text-white" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar">
@@ -164,7 +143,7 @@ function renderMenu($c, $a) {
     </nav>
 </div>
 
-<div class="offcanvas offcanvas-start bg-dark text-white" tabindex="-1" id="mobileSidebar" style="width: 280px;">
+<div class="offcanvas offcanvas-start bg-dark text-white mobile-sidebar" tabindex="-1" id="mobileSidebar">
   <div class="offcanvas-header bg-black bg-gradient border-bottom border-secondary">
     <h5 class="offcanvas-title fw-bold">
         <i class="bi bi-person-circle me-2"></i> 
@@ -177,12 +156,90 @@ function renderMenu($c, $a) {
   </div>
 </div>
 
+<div class="modal fade text-dark" id="sysPassModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title"><i class="bi bi-shield-lock"></i> Cambiar Mi Contraseña</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form action="?c=User&a=change_own_password" method="POST">
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="form-label">Nueva Contraseña</label>
+            <input type="password" name="new_password" class="form-control" required minlength="6">
+          </div>
+          <div class="mb-3 mb-0">
+            <label class="form-label">Confirmar Contraseña</label>
+            <input type="password" name="confirm_password" class="form-control" required minlength="6">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Actualizar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('click', function (event) {
+        const trigger = event.target.closest('.js-open-password-modal');
+        if (!trigger) return;
+
+        event.preventDefault();
+
+        const mobileSidebar = document.getElementById('mobileSidebar');
+        const modalElement = document.getElementById('sysPassModal');
+        if (!modalElement) return;
+
+        const showModal = () => {
+            bootstrap.Modal.getOrCreateInstance(modalElement).show();
+        };
+
+        if (mobileSidebar && mobileSidebar.classList.contains('show')) {
+            const offcanvasInstance = bootstrap.Offcanvas.getOrCreateInstance(mobileSidebar);
+            const onHidden = () => {
+                mobileSidebar.removeEventListener('hidden.bs.offcanvas', onHidden);
+                showModal();
+            };
+            mobileSidebar.addEventListener('hidden.bs.offcanvas', onHidden);
+            offcanvasInstance.hide();
+            return;
+        }
+
+        showModal();
+    });
+</script>
 <style>
     .sidebar {
         min-height: 100vh;
         background-color: #212529;
         color: white;
+    }
+
+    .desktop-sidebar {
+        width: 260px;
+        min-height: 100vh;
+        position: sticky;
+        top: 0;
+        overflow-y: auto;
+    }
+
+    .app-main-content {
+        min-width: 0;
+        min-height: 100vh;
+        overflow-y: auto;
+    }
+
+    .mobile-sidebar {
+        width: 100vw;
+        max-width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
     }
 
     .sidebar a {
@@ -218,9 +275,70 @@ function renderMenu($c, $a) {
     .sidebar .brand-box {
         background: linear-gradient(135deg, #000 0%, #111827 100%);
     }
+
+    @media (max-width: 1199.98px) {
+        .desktop-sidebar {
+            width: 230px;
+        }
+    }
+
+    @media (max-width: 991.98px) {
+        .sidebar a {
+            padding: 11px 18px;
+        }
+
+        .sidebar i {
+            width: 22px;
+        }
+    }
+
+    @media (max-width: 991.98px) {
+        .desktop-sidebar {
+            display: none !important;
+        }
+
+        .sidebar a {
+            padding: 11px 18px;
+        }
+
+        .sidebar i {
+            width: 22px;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .sidebar {
+            min-height: auto;
+        }
+
+        .mobile-sidebar {
+            width: 100vw;
+            max-width: 100vw;
+            height: 100vh;
+            max-height: 100vh;
+        }
+
+        .app-main-content {
+            min-height: auto;
+            height: auto !important;
+            overflow: visible;
+        }
+    }
 </style>
 <script>
     const urlParamsSidebar = new URLSearchParams(window.location.search);
     if(urlParamsSidebar.get('msg') === 'pass_ok') Swal.fire('¡Éxito!', 'Tu contraseña ha sido actualizada.', 'success');
     if(urlParamsSidebar.get('err') === 'pass_mismatch') Swal.fire('Error', 'Las contraseñas no coinciden.', 'error');
+
+    const sidebarWrapper = document.currentScript?.closest('.d-flex');
+    const syncSidebarLayout = () => {
+        if (!sidebarWrapper) return;
+
+        const isMobile = window.innerWidth < 1200;
+        sidebarWrapper.style.flexDirection = isMobile ? 'column' : 'row';
+        sidebarWrapper.style.alignItems = isMobile ? 'stretch' : 'flex-start';
+    };
+
+    syncSidebarLayout();
+    window.addEventListener('resize', syncSidebarLayout);
 </script>

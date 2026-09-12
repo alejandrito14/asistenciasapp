@@ -28,7 +28,7 @@ $todayDay = $daysMap[(int)$now->format('N')] ?? '';
 
 if (!isSchoolDay($db, $today)) {
     $reason = schoolCalendarBlockReason($db, $today);
-    echo "Dia inhabel. No se abren sesiones.\n";
+    echo "Día inhábil. No se abren sesiones.\n";
     if ($reason) {
         echo "Bloqueo: {$reason['tipo']} - {$reason['descripcion']}\n";
     }
@@ -37,6 +37,7 @@ if (!isSchoolDay($db, $today)) {
 
 $stmt = $db->prepare(
     "SELECT gmm.id AS grupo_materia_maestro_id,
+            gmm.maestro_id,
             h.dia_semana,
             h.hora_inicio,
             COALESCE(h.minutos_antes, 15) AS minutos_antes
@@ -63,6 +64,10 @@ foreach ($schedules as $schedule) {
     }
 
     if ($scheduleDay !== $todayDay) {
+        continue;
+    }
+
+    if (!isSchoolDay($db, $today, (int)$schedule['maestro_id'])) {
         continue;
     }
 

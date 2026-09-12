@@ -23,6 +23,7 @@ class SchoolCalendarController {
         $total = $this->model->countAll($search);
         $items = $this->model->readPaginated($search, $page, $this->perPage);
         $totalPages = max(1, (int)ceil($total / $this->perPage));
+        $teachers = $this->getTeachers();
         require_once '../app/views/school_calendar/index.php';
     }
 
@@ -38,6 +39,7 @@ class SchoolCalendarController {
             'modo_fecha' => trim((string)($_POST['modo_fecha'] ?? 'unico')),
             'tipo' => trim((string)($_POST['tipo'] ?? '')),
             'descripcion' => trim((string)($_POST['descripcion'] ?? '')),
+            'maestro_id' => isset($_POST['para_maestro']) ? (int)($_POST['maestro_id'] ?? 0) : 0,
             'activo' => isset($_POST['activo']) ? 1 : 0,
         ];
 
@@ -62,6 +64,7 @@ class SchoolCalendarController {
             header("Location: ?c=SchoolCalendar&err=no_encontrado");
             exit;
         }
+        $teachers = $this->getTeachers();
         require_once '../app/views/school_calendar/edit.php';
     }
 
@@ -78,6 +81,7 @@ class SchoolCalendarController {
             'modo_fecha' => trim((string)($_POST['modo_fecha'] ?? 'unico')),
             'tipo' => trim((string)($_POST['tipo'] ?? '')),
             'descripcion' => trim((string)($_POST['descripcion'] ?? '')),
+            'maestro_id' => isset($_POST['para_maestro']) ? (int)($_POST['maestro_id'] ?? 0) : 0,
             'activo' => isset($_POST['activo']) ? 1 : 0,
         ];
 
@@ -102,6 +106,15 @@ class SchoolCalendarController {
         }
         header("Location: ?c=SchoolCalendar&msg=eliminado");
         exit;
+    }
+
+    private function getTeachers(): array {
+        $stmt = $this->model->getConnection()->query(
+            "SELECT id, nombre, apellido_paterno, apellido_materno
+             FROM maestros WHERE activo = 1
+             ORDER BY apellido_paterno, apellido_materno, nombre"
+        );
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
 ?>

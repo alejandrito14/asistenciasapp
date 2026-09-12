@@ -2,11 +2,17 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Maestros</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
         .table-inactive { opacity: 0.65; background-color: #f8f9fa; }
+        .page-shell {
+            min-width: 0;
+            min-height: 100vh;
+            overflow-y: auto;
+        }
         @media print {
             body * { visibility: hidden; }
             .modal-backdrop, .sidebar { display: none !important; }
@@ -18,83 +24,89 @@
 <body class="bg-light">
 <div class="d-flex">
     <?php require_once '../app/views/layouts/sidebar.php'; ?>
-    <div class="flex-grow-1 p-4" style="height: 100vh; overflow-y: auto;">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2 class="mb-0 fw-bold text-secondary"><i class="bi bi-person-badge-fill"></i> Lista de Maestros</h2>
-                <small class="text-muted">Administra los perfiles de maestros registrados en la base de datos.</small>
+    <div class="app-main-content flex-grow-1 bg-light page-shell">
+        <nav class="navbar navbar-light bg-white shadow-sm px-4 py-3">
+            <div class="container-fluid">
+                <div>
+                    <span class="navbar-brand mb-0 h1 fw-bold text-primary">Lista de Maestros</span>
+                    <div class="text-muted">Administra los perfiles de maestros registrados en la base de datos.</div>
+                </div>
+                <button class="btn btn-success shadow" data-bs-toggle="modal" data-bs-target="#newEmployeeModal">
+                    <i class="bi bi-plus-circle"></i> Nuevo Maestro
+                </button>
             </div>
-            <button class="btn btn-success shadow" data-bs-toggle="modal" data-bs-target="#newEmployeeModal">
-                <i class="bi bi-plus-circle"></i> Nuevo Maestro
-            </button>
-        </div>
+        </nav>
 
-        <?php if (isset($_GET['msg']) && $_GET['msg'] === 'guardado'): ?>
-            <div class="alert alert-success">Maestro guardado correctamente.</div>
-        <?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'actualizado'): ?>
-            <div class="alert alert-success">Maestro actualizado correctamente.</div>
-        <?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'estado_cambiado'): ?>
-            <div class="alert alert-success">Estado del maestro actualizado.</div>
-        <?php endif; ?>
+        <div class="container-fluid p-4">
+            <?php if (isset($_GET['msg']) && $_GET['msg'] === 'guardado'): ?>
+                <div class="alert alert-success">Maestro guardado correctamente.</div>
+            <?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'actualizado'): ?>
+                <div class="alert alert-success">Maestro actualizado correctamente.</div>
+            <?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'estado_cambiado'): ?>
+                <div class="alert alert-success">Estado del maestro actualizado.</div>
+            <?php endif; ?>
 
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-body py-3">
-                <form action="" method="GET" class="row g-2 align-items-center">
-                    <input type="hidden" name="c" value="Employee">
-                    <div class="col-auto"><label class="col-form-label fw-bold">Buscar:</label></div>
-                    <div class="col-md-5">
-                        <input type="text" name="q" class="form-control" placeholder="Nombre, apellidos, correo o teléfono..." value="<?php echo htmlspecialchars($_GET['q'] ?? ''); ?>">
-                    </div>
-                    <div class="col-auto">
-                        <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Filtrar</button>
+            <div class="card shadow border-0 mb-3">
+                <div class="card-body py-3">
+                    <form action="" method="GET" class="row g-2 align-items-center">
+                        <input type="hidden" name="c" value="Employee">
+                        <div class="col-12 col-md-auto"><label class="col-form-label fw-bold">Buscar:</label></div>
+                        <div class="col-12 col-md-5">
+                            <input type="text" name="q" class="form-control" placeholder="Nombre, apellidos, correo o teléfono..." value="<?php echo htmlspecialchars($_GET['q'] ?? ''); ?>">
+                        </div>
+                        <div class="col-12 col-md-auto d-grid">
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Filtrar</button>
+                        </div>
                         <?php if (!empty($_GET['q'])): ?>
-                            <a href="?c=Employee" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+                            <div class="col-12 col-md-auto d-grid">
+                                <a href="?c=Employee" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i> Limpiar</a>
+                            </div>
                         <?php endif; ?>
-                    </div>
-                </form>
+                    </form>
+                </div>
             </div>
-        </div>
 
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-0">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="ps-4">Estado</th>
-                            <th>Nombre Completo</th>
-                            <th>Correo</th>
-                            <th>Teléfono</th>
-                            <th class="text-end pe-4">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (!empty($employees)): ?>
-                            <?php foreach ($employees as $emp): ?>
-                                <tr class="<?php echo ((int)$emp['activo'] === 0) ? 'table-inactive' : ''; ?>">
-                                    <td class="ps-4">
-                                        <?php echo ((int)$emp['activo'] === 1) ? '<span class="badge bg-success">ACTIVO</span>' : '<span class="badge bg-danger">INACTIVO</span>'; ?>
-                                    </td>
-                                    <td class="fw-bold">
-                                        <?php echo htmlspecialchars(trim($emp['nombre'] . ' ' . $emp['apellido_paterno'] . ' ' . $emp['apellido_materno'])); ?>
-                                    </td>
-                                    <td><?php echo htmlspecialchars($emp['correo'] ?? ''); ?></td>
-                                    <td><?php echo htmlspecialchars($emp['telefono'] ?? ''); ?></td>
-                                    <td class="text-end pe-4">
-                                        <a href="?c=Employee&a=edit&id=<?php echo (int)$emp['id']; ?>" class="btn btn-sm btn-warning shadow-sm"><i class="bi bi-pencil-fill"></i></a>
-                                        <?php if ((int)$emp['activo'] === 1): ?>
-                                            <a href="?c=Employee&a=toggle&id=<?php echo (int)$emp['id']; ?>&status=1" class="btn btn-sm btn-outline-danger shadow-sm" onclick="return confirm('¿Desactivar este maestro?');"><i class="bi bi-power"></i></a>
-                                        <?php else: ?>
-                                            <a href="?c=Employee&a=toggle&id=<?php echo (int)$emp['id']; ?>&status=0" class="btn btn-sm btn-outline-success shadow-sm" onclick="return confirm('¿Reactivar este maestro?');"><i class="bi bi-power"></i></a>
-                                        <?php endif; ?>
-                                        <a href="?c=Employee&a=delete&id=<?php echo (int)$emp['id']; ?>" class="btn btn-sm btn-outline-danger shadow-sm" onclick="return confirm('¿Eliminar este maestro?');"><i class="bi bi-trash"></i></a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <tr><td colspan="5" class="text-center p-5 text-muted">No hay maestros registrados.</td></tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+            <div class="card shadow border-0">
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-hover align-middle mb-0 bg-white">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Estado</th>
+                                <th>Nombre Completo</th>
+                                <th>Correo</th>
+                                <th>Teléfono</th>
+                                <th class="text-end pe-3">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (!empty($employees)): ?>
+                                <?php foreach ($employees as $emp): ?>
+                                    <tr class="<?php echo ((int)$emp['activo'] === 0) ? 'table-inactive' : ''; ?>">
+                                        <td class="ps-3">
+                                            <?php echo ((int)$emp['activo'] === 1) ? '<span class="badge bg-success">ACTIVO</span>' : '<span class="badge bg-danger">INACTIVO</span>'; ?>
+                                        </td>
+                                        <td class="fw-bold">
+                                            <?php echo htmlspecialchars(trim($emp['nombre'] . ' ' . $emp['apellido_paterno'] . ' ' . $emp['apellido_materno'])); ?>
+                                        </td>
+                                        <td><?php echo htmlspecialchars($emp['correo'] ?? ''); ?></td>
+                                        <td><?php echo htmlspecialchars($emp['telefono'] ?? ''); ?></td>
+                                        <td class="text-end pe-3">
+                                            <a href="?c=Employee&a=edit&id=<?php echo (int)$emp['id']; ?>" class="btn btn-sm btn-warning shadow-sm"><i class="bi bi-pencil-fill"></i></a>
+                                            <?php if ((int)$emp['activo'] === 1): ?>
+                                                <a href="?c=Employee&a=toggle&id=<?php echo (int)$emp['id']; ?>&status=1" class="btn btn-sm btn-outline-danger shadow-sm" onclick="return confirm('¿Desactivar este maestro?');"><i class="bi bi-power"></i></a>
+                                            <?php else: ?>
+                                                <a href="?c=Employee&a=toggle&id=<?php echo (int)$emp['id']; ?>&status=0" class="btn btn-sm btn-outline-success shadow-sm" onclick="return confirm('¿Reactivar este maestro?');"><i class="bi bi-power"></i></a>
+                                            <?php endif; ?>
+                                            <a href="?c=Employee&a=delete&id=<?php echo (int)$emp['id']; ?>" class="btn btn-sm btn-outline-danger shadow-sm" onclick="return confirm('¿Eliminar este maestro?');"><i class="bi bi-trash"></i></a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr><td colspan="5" class="text-center p-5 text-muted">No hay maestros registrados.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

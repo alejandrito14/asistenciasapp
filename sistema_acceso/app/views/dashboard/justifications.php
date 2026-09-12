@@ -10,7 +10,7 @@
 <body>
 <div class="d-flex">
     <?php require_once '../app/views/layouts/sidebar.php'; ?>
-    <div class="flex-grow-1 bg-light" style="height: 100vh; overflow-y: auto;">
+    <div class="app-main-content flex-grow-1 bg-light">
         <nav class="navbar navbar-light bg-white shadow-sm px-4 py-3">
             <div class="container-fluid">
                 <span class="navbar-brand mb-0 h1 fw-bold text-primary">Justificantes</span>

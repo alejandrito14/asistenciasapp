@@ -26,6 +26,52 @@ class Alumno {
         return $row ?: null;
     }
 
+    public function findById(int $id): ?array {
+        $query = "SELECT * FROM " . $this->table . " WHERE id = :id LIMIT 1";
+        $stmt = $this->conn->prepare($query);
+        $stmt->bindValue(':id', $id, PDO::PARAM_INT);
+        $stmt->execute();
+
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    public function countActive(): int {
+        $query = "SELECT COUNT(*) AS total FROM " . $this->table . " WHERE activo = 1";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int)($row['total'] ?? 0);
+    }
+
+    public function getDirectory(string $search = '', string $status = ''): array {
+        $query = "SELECT nombre, apellido_paterno, apellido_materno, telefono, correo,
+                         tutor_nombre, tutor_apellido_paterno, tutor_apellido_materno,
+                         tutor_telefono, tutor_correo, activo
+                  FROM " . $this->table . " WHERE 1 = 1";
+
+        if ($search !== '') {
+            $query .= " AND (nombre LIKE :search OR apellido_paterno LIKE :search
+                        OR apellido_materno LIKE :search OR telefono LIKE :search
+                        OR correo LIKE :search OR tutor_nombre LIKE :search
+                        OR tutor_apellido_paterno LIKE :search OR tutor_apellido_materno LIKE :search)";
+        }
+        if ($status === 'activo' || $status === 'inactivo') {
+            $query .= " AND activo = :activo";
+        }
+
+        $query .= " ORDER BY apellido_paterno, apellido_materno, nombre";
+        $stmt = $this->conn->prepare($query);
+        if ($search !== '') {
+            $stmt->bindValue(':search', '%' . $search . '%');
+        }
+        if ($status === 'activo' || $status === 'inactivo') {
+            $stmt->bindValue(':activo', $status === 'activo' ? 1 : 0, PDO::PARAM_INT);
+        }
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function readPaginated($search = '', $page = 1, $perPage = 10) {
         $offset = max(0, ($page - 1) * $perPage);
         $query = "SELECT * FROM " . $this->table;

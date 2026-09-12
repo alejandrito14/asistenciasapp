@@ -2,62 +2,80 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Grupo-Materias</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        .page-shell {
+            min-width: 0;
+            min-height: 100vh;
+            overflow-y: auto;
+        }
+    </style>
 </head>
 <body class="bg-light">
 <div class="d-flex">
     <?php require_once '../app/views/layouts/sidebar.php'; ?>
-    <div class="flex-grow-1 p-4" style="height: 100vh; overflow-y: auto;">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2 class="mb-0 fw-bold text-secondary"><i class="bi bi-diagram-3"></i> Grupo-Materias</h2>
-                <small class="text-muted">Relaciona cada grupo con sus materias.</small>
+    <div class="app-main-content flex-grow-1 bg-light page-shell">
+        <nav class="navbar navbar-light bg-white shadow-sm px-4 py-3">
+            <div class="container-fluid">
+                <div>
+                    <span class="navbar-brand mb-0 h1 fw-bold text-primary">Grupo-Materias</span>
+                    <div class="text-muted">Relaciona cada grupo con sus materias.</div>
+                </div>
+                <button class="btn btn-success shadow" data-bs-toggle="modal" data-bs-target="#createModal">
+                    <i class="bi bi-plus-circle"></i> Nueva Relación
+                </button>
             </div>
-            <button class="btn btn-success shadow" data-bs-toggle="modal" data-bs-target="#createModal">
-                <i class="bi bi-plus-circle"></i> Nueva Relación
-            </button>
-        </div>
+        </nav>
 
-        <?php if (isset($_GET['msg']) && $_GET['msg'] === 'creado'): ?><div class="alert alert-success">Relación creada correctamente.</div><?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'actualizado'): ?><div class="alert alert-success">Relación actualizada correctamente.</div><?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'eliminado'): ?><div class="alert alert-success">Relación eliminada correctamente.</div><?php elseif (isset($_GET['err']) && $_GET['err'] === 'tiene_relaciones'): ?><div class="alert alert-warning">No se puede eliminar porque ya tiene dependencias.</div><?php elseif (isset($_GET['err']) && $_GET['err'] === 'duplicado'): ?><div class="alert alert-warning">Ese grupo ya tiene asignada esa materia.</div><?php endif; ?>
+        <div class="container-fluid p-4">
+            <?php if (isset($_GET['msg']) && $_GET['msg'] === 'creado'): ?><div class="alert alert-success">Relación creada correctamente.</div><?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'actualizado'): ?><div class="alert alert-success">Relación actualizada correctamente.</div><?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'eliminado'): ?><div class="alert alert-success">Relación eliminada correctamente.</div><?php elseif (isset($_GET['err']) && $_GET['err'] === 'tiene_relaciones'): ?><div class="alert alert-warning">No se puede eliminar porque ya tiene dependencias.</div><?php elseif (isset($_GET['err']) && $_GET['err'] === 'duplicado'): ?><div class="alert alert-warning">Ese grupo ya tiene asignada esa materia.</div><?php endif; ?>
 
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-body py-3">
-                <form class="row g-2 align-items-center" method="GET">
-                    <input type="hidden" name="c" value="GroupSubject">
-                    <div class="col-auto"><label class="col-form-label fw-bold">Buscar:</label></div>
-                    <div class="col-md-6"><input type="text" name="q" class="form-control" placeholder="Grupo o materia" value="<?php echo htmlspecialchars($search ?? ''); ?>"></div>
-                    <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="bi bi-search"></i> Filtrar</button></div>
-                </form>
+            <div class="card shadow border-0 mb-3">
+                <div class="card-body py-3">
+                    <form class="row g-2 align-items-center" method="GET">
+                        <input type="hidden" name="c" value="GroupSubject">
+                        <div class="col-12 col-md-auto"><label class="col-form-label fw-bold">Buscar:</label></div>
+                        <div class="col-12 col-md-5"><input type="text" name="q" class="form-control" placeholder="Grupo o materia" value="<?php echo htmlspecialchars($search ?? ''); ?>"></div>
+                        <div class="col-12 col-md-auto d-grid"><button class="btn btn-primary" type="submit"><i class="bi bi-search"></i> Filtrar</button></div>
+                    </form>
+                </div>
             </div>
-        </div>
 
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-0 table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light"><tr><th class="ps-4">Grupo</th><th>Materia</th><th class="text-end pe-4">Acciones</th></tr></thead>
-                    <tbody>
-                        <?php if (!empty($items)): foreach ($items as $item): ?>
+            <div class="card shadow border-0">
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-hover align-middle mb-0 bg-white">
+                        <thead class="table-light">
                             <tr>
-                                <td class="fw-bold"><?php echo htmlspecialchars($item['grupo_nombre']); ?> <?php echo htmlspecialchars($item['semestre']); ?></td>
-                                <td><?php echo htmlspecialchars($item['materia_clave']); ?> - <?php echo htmlspecialchars($item['materia_nombre']); ?></td>
-                                <td class="text-end pe-4">
-                                    <a href="?c=GroupSubject&a=edit&id=<?php echo (int)$item['id']; ?>" class="btn btn-sm btn-warning shadow-sm"><i class="bi bi-pencil-fill"></i></a>
-                                    <a href="?c=GroupSubject&a=delete&id=<?php echo (int)$item['id']; ?>" class="btn btn-sm btn-outline-danger shadow-sm" onclick="return confirm('¿Eliminar relación?');"><i class="bi bi-trash"></i></a>
-                                </td>
+                                <th class="ps-3">Grupo</th>
+                                <th>Materia</th>
+                                <th class="text-end pe-3">Acciones</th>
                             </tr>
-                        <?php endforeach; else: ?>
-                            <tr><td colspan="3" class="text-center p-5 text-muted">No hay relaciones registradas.</td></tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            <?php if (!empty($items)): foreach ($items as $item): ?>
+                                <tr>
+                                    <td class="fw-bold ps-3"><?php echo htmlspecialchars($item['grupo_nombre']); ?> <?php echo htmlspecialchars($item['semestre']); ?></td>
+                                    <td><?php echo htmlspecialchars($item['materia_clave']); ?> - <?php echo htmlspecialchars($item['materia_nombre']); ?></td>
+                                    <td class="text-end pe-3">
+                                        <a href="?c=GroupSubject&a=edit&id=<?php echo (int)$item['id']; ?>" class="btn btn-sm btn-warning shadow-sm"><i class="bi bi-pencil-fill"></i></a>
+                                        <a href="?c=GroupSubject&a=delete&id=<?php echo (int)$item['id']; ?>" class="btn btn-sm btn-outline-danger shadow-sm" onclick="return confirm('¿Eliminar relación?');"><i class="bi bi-trash"></i></a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; else: ?>
+                                <tr><td colspan="3" class="text-center p-5 text-muted">No hay relaciones registradas.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
 
-        <?php if ($totalPages > 1): ?>
-            <nav class="mt-4"><ul class="pagination justify-content-center"><?php for ($i=1; $i<=$totalPages; $i++): ?><li class="page-item <?php echo ($i===$page)?'active':''; ?>"><a class="page-link" href="?c=GroupSubject&q=<?php echo urlencode($search ?? ''); ?>&page=<?php echo $i; ?>"><?php echo $i; ?></a></li><?php endfor; ?></ul></nav>
-        <?php endif; ?>
+            <?php if ($totalPages > 1): ?>
+                <nav class="mt-4"><ul class="pagination justify-content-center"><?php for ($i=1; $i<=$totalPages; $i++): ?><li class="page-item <?php echo ($i===$page)?'active':''; ?>"><a class="page-link" href="?c=GroupSubject&q=<?php echo urlencode($search ?? ''); ?>&page=<?php echo $i; ?>"><?php echo $i; ?></a></li><?php endfor; ?></ul></nav>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 
