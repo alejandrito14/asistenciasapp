@@ -1383,7 +1383,7 @@ if ($action === 'studentGroupSubjects') {
     }
 
     $stmt = $db->prepare(
-        "SELECT gm.id, m.clave, m.nombre, m.descripcion
+        "SELECT gm.id, m.id AS materia_id, m.clave, m.nombre, m.descripcion
          FROM alumnos_grupos ag
          INNER JOIN grupo_materias gm ON ag.grupo_id = gm.grupo_id
          INNER JOIN materias m ON gm.materia_id = m.id
@@ -1480,6 +1480,8 @@ if ($action === 'studentSubjectSchedule') {
                 ma.nombre AS maestro_nombre, ma.apellido_paterno, ma.apellido_materno,
                 sc.id AS sesion_id,
                 sc.estatus AS sesion_estatus,
+                a.id AS asistencia_id,
+                a.estado_id,
                 ca.nombre AS estado_actual
          FROM alumnos_grupos ag
          INNER JOIN grupo_materias gm ON ag.grupo_id = gm.grupo_id
@@ -1536,8 +1538,10 @@ if ($action === 'studentSubjectSchedule') {
 
     if ($todaySchedule) {
         $estadoActual = strtoupper((string)($todaySchedule['estado_actual'] ?? ''));
-        $todaySchedule['asistencia_registrada'] = in_array($estadoActual, ['ASISTENCIA', 'ASISTIÓ', 'ASISTENTE'], true);
-        $todaySchedule['falta_registrada'] = $estadoActual === 'FALTA';
+        $todaySchedule['registro_existente'] = !empty($todaySchedule['asistencia_id']);
+        $todaySchedule['asistencia_registrada'] = (int)($todaySchedule['estado_id'] ?? 0) === 1
+            || in_array($estadoActual, ['ASISTENCIA', 'ASISTIÓ', 'ASISTENTE', 'PRESENTE', 'RETARDO'], true);
+        $todaySchedule['falta_registrada'] = (int)($todaySchedule['estado_id'] ?? 0) === 2 || $estadoActual === 'FALTA';
         $todaySchedule['estado_actual'] = $estadoActual !== '' ? $estadoActual : null;
         unset($todaySchedule['_key']);
         echo json_encode(['success' => true, 'message' => 'OK', 'data' => $todaySchedule]);
